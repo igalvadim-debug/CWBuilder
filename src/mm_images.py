@@ -619,11 +619,19 @@ def node_inputs(spec: dict, wanted: dict) -> dict | None:
     return give
 
 
-def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -> list:
-    """Prompt-Upsampler (LLM) - liefert einen STRING-Ausgang. None, wenn nichts passt."""
+def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -> list | None:
+    """Prompt-Upsampler (LLM) - liefert einen STRING-Ausgang. None, wenn nichts passt.
+
+    Der Upsampler ist ein optionales Extra: Er darf den Bild-Graphen unter keinen
+    Umstaenden beschaedigen. Jeder Pfad wird daher in sich abgeschlossen gebaut und
+    nur zurueckgegeben, wenn alle bentigten Nodes und Modelle wirklich vorhanden sind;
+    sonst bricht er mit None ab, ohne Knoten im Graphen zu hinterlassen.
+    """
     if not cat.object_info:
         warn(info, "ComfyUI laeuft nicht - Prompt-Upsampler kann nicht geprueft werden "
                    "(mit laufendem Server erneut pruefen: mm.py check).")
+        return None
+    if isinstance(prompt, list):      # Sicherheit: nie ein Node-Link als Text einfuettern
         return None
     up_st = cat.pick("text_encoders", flux3_upsampler_cands(p), ext=".safetensors", required=False)
     # 1) dedizierte Upsampler-/TextEncodeAPI-Nodes der Flux-3-Templates
@@ -734,6 +742,18 @@ def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
     model, clip = lora_full(g, model, clip, loras)
     steps, cfg, smp, sch = sampling(p, turbo, 25, 3.5)
 
+    # Referenzbilder zuerst anlegen: ihre Groesse bestimmt W/H (und damit auch
+    # die Upsampler-Vorlage), bevor der optionale Upsampler-Zweig gebaut wird.
+    first_ref = None
+    ref_lats: list = []
+    for name in p.images:
+        li = g.add("LoadImage", image=name)
+        sc = scale_total(g, o(li), p.megapixels)
+        ref_lats.append(g.add("VAEEncode", pixels=o(sc), vae=vae))
+        if first_ref is None:
+            first_ref = o(sc)
+    W, H, derive = sizes(g, p, first_ref)
+
     prompt_text = p.prompt
     if not p.no_upsample:
         up = flux3_upsample(g, p, cat, info, prompt_text)
@@ -744,21 +764,32 @@ def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
                        "Prompt wird unveraendert verwendet. Abstellen: --no-upsample")
     pos = o(g.add("CLIPTextEncode", text=prompt_text, clip=clip))
     neg = negative_cond(g, clip, pos, p, cfg)
-
-    first_ref = None
-    for name in p.images:
-        li = g.add("LoadImage", image=name)
-        sc = scale_total(g, o(li), p.megapixels)
-        lat = g.add("VAEEncode", pixels=o(sc), vae=vae)
+    for lat in ref_lats:   # Referenz-Latente an beide Bedingungen anhaengen
         pos = o(g.add("ReferenceLatent", conditioning=pos, latent=o(lat)))
         neg = o(g.add("ReferenceLatent", conditioning=neg, latent=o(lat)))
-        if first_ref is None:
-            first_ref = o(sc)
-    W, H, derive = sizes(g, p, first_ref)
 
     if p.control:
         raise Unsupported("Flux 3: noch kein ControlNet - nutze klein9b (--control union) oder qwen21.")
 
+    # Flux-3-Sampling wie im offiziellen ComfyUI-Template 'flux3_klein_base':
+    # Modell -> Flux3ImageGuidanceEmbedder (guidance-Skalierung) -> CFGGuider ->
+    # SamplerCustomAdvanced mit RandomNoise + Flux2Scheduler. Ohne diese Node
+    # ignoriert das Modell die cfg/guidance vollstaendig - das Ergebnis wirkt
+    # kaputt ("klappt nicht"), obwohl der Graph laeuft.
+    # Der Guidance-Wert ist eine Zahl ODER ein Link auf 'BasicScheduler' (Steps).
+    if cat.object_info is None or "Flux3ImageGuidanceEmbedder" in cat.object_info:
+        gvalue: object = 3.5
+        if steps != 25 and cat.object_info is not None:
+            bs = cat.object_info.get("BasicScheduler")
+            outs = (bs or {}).get("output") or []
+            allowed = {**((bs or {}).get("input", {}).get("required") or {}),
+                       **((bs or {}).get("input", {}).get("optional") or {})}
+            if "FLOAT" in outs and {"model", "steps"} <= set(allowed):
+                gvalue = o(g.add("BasicScheduler", model=model, steps=steps))
+        model = o(g.add("Flux3ImageGuidanceEmbedder", model=model, guidance=gvalue))
+    elif cat.object_info is not None:
+        warn(info, "Node 'Flux3ImageGuidanceEmbedder' fehlt in der laufenden ComfyUI - "
+                   "ComfyUI und Custom-Nodes aktualisieren, sonst ignoriert Flux 3 die Steuerung.")
     latent = o(g.add("EmptyFlux2LatentImage", width=W, height=H, batch_size=p.batch))
     sigmas = g.add("Flux2Scheduler", steps=steps, width=W, height=H)
     noise = g.add("RandomNoise", noise_seed=seed_of(p, info))
