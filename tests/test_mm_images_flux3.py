@@ -322,6 +322,47 @@ class Flux3UpsamplerTest(unittest.TestCase):
         self.assertEqual(g.nodes[nid]["class_type"], "TextEncodeAPI")
         self.assertIn("api", g.nodes[nid]["inputs"])
 
+    def test_chatgpt_node_gets_api_endpoint_and_seed_when_required(self):
+        """ChatGPT-Pflichteingaben 'api_endpoint'/'seed' muessen vor dem ins-Check gefuellt sein."""
+        root = Path(self._tmp.name) / "chatgpt_llm"
+        (root / "LLM").mkdir(parents=True)
+        (root / "LLM" / "qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors").write_bytes(b"x")
+        combo = lambda opts: [opts]
+        spec = {
+            "input": {"required": {"file_name": combo(["qwen3.5_9b_flux3_prompt_upsampler_w4a8"]),
+                                   "user_prompt": ["STRING", {"multiline": True}],
+                                   "system_prompt": ["STRING", {"default": ""}],
+                                   "api_endpoint": ["STRING", {"default": "http://127.0.0.1:8181/prompt"}],
+                                   "temperature": ["FLOAT", {"default": 0.7}],
+                                   "top_p": ["FLOAT", {"default": 1.0}],
+                                   "max_tokens": ["INT", {"default": 512}],
+                                   "seed": ["INT", {"default": 0}],
+                                   "mode": combo(["chat"])},
+                      "optional": {}},
+            "output": ["STRING"], "output_is_list": [False],
+        }
+        for url in ("http://127.0.0.1:8188/", None):
+            with self.subTest(url=url):
+                cat = Catalog([root], url=None, prefer_live=False)
+                cat.object_info = {"ChatGPT": spec}
+                if url is not None:
+                    cat.url = url
+                g = Graph()
+                info = {"models": [], "warnings": [], "notes": []}
+
+                link = flux3_upsample(g, base_params(seed=42), cat, info, "hallo")
+
+                self.assertIsNotNone(link, "ChatGPT-Zweig muss bei Pflichtfeldern gebaut werden")
+                inputs = g.nodes[link[0]]["inputs"]
+                expected_ep = url.rstrip("/") + "/prompt" if url else "http://127.0.0.1:8181/prompt"
+                self.assertEqual(inputs["api_endpoint"], expected_ep)
+                self.assertEqual(inputs["seed"], 42)
+                self.assertEqual(inputs["user_prompt"], "hallo")
+                # Combo-Wert 'file_name' bleibt innerhalb der Node-Liste
+                from mm_common import combo_options
+                self.assertIn(inputs["file_name"],
+                              combo_options(spec["input"]["required"]["file_name"]))
+
 
 if __name__ == "__main__":
     unittest.main()
