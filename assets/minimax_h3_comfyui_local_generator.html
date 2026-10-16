@@ -151,9 +151,18 @@ function build(){
  W.push("Negative prompt and CFG are not wired: the reference graph uses BasicGuider (no CFG).");
  if(mode==="last_frame_chain"&&aud)W.push("Chain trims 1 duplicate frame per join; audio is not trimmed (same as the reference graph).");
  let nid=0,lid=0;const nodes=[],links=[],ph={};
- const N=(type,title,x,y,wv,ins,outs)=>{const n={id:++nid,type:type,pos:[x,y],size:[300,120],flags:{},order:nid-1,mode:0,
-  inputs:ins.map(a=>Object.assign({name:a[0],type:a[1],link:null},a[2]||{})),
-  outputs:outs.map((a,i)=>({name:a[0],type:a[1],links:[],slot_index:i})),title:title,
+ // Slot geometry must match what ComfyUI (LiteGraph) recomputes when it loads the
+ // workflow, otherwise link endpoints do not land on the connection dots and links
+ // appear to start/end "somewhere around the node" going nowhere. LiteGraph rules:
+ // fixed node width (400 default, 500 for LoadImage), height = title bar + one ROW
+ // per slot + widget rows (converted-to-input widgets don't add height) + padding;
+ // input slots sit at TOP+ROW*(i+0.5), output slots at TOP+SLOT_SPACING*(i+0.5).
+ const NODE_W=400,LIMG_W=500,TOP=32,ROW=20,WIDGET_ROW=30,SLOT_SPACING=28,PAD=16;
+ const N=(type,title,x,y,wv,ins,outs)=>{const wi=(ins||[]).filter(a=>a[2]&&a[2].widget).length;
+  const h=Math.round(TOP+((ins||[]).length+(outs||[]).length)*ROW+Math.max(0,(wv||[]).length-wi)*(WIDGET_ROW+10)+PAD);
+  const n={id:++nid,type:type,pos:[x,y],size:[type==="LoadImage"?LIMG_W:NODE_W,h],flags:{},order:nid-1,mode:0,
+  inputs:(ins||[]).map(a=>Object.assign({name:a[0],type:a[1],link:null},a[2]||{})),
+  outputs:(outs||[]).map((a,i)=>({name:a[0],type:a[1],links:[],slot_index:i})),title:title,
   properties:{"Node name for S&R":type},widgets_values:wv};
   nodes.push(n);if(DESC[type])ph[type]=DESC[type];return n;};
  const L=(a,as,b,bs)=>{const id=++lid;links.push([id,a.id,as,b.id,bs,a.outputs[as].type]);a.outputs[as].links.push(id);b.inputs[bs].link=id;};
@@ -272,7 +281,7 @@ function build(){
   const n0=JSON.parse(JSON.stringify(nodes)),l0=JSON.parse(JSON.stringify(links)),nid0=nid,lid0=lid,jids=nodes.filter(n=>n.id>j0).map(n=>n.id);
   const pack=(ids,title,px,py)=>{
    const set=new Set(ids),NM={};nodes.forEach(n=>{NM[n.id]=n;});
-   const sid=uid(),inst={id:++nid,type:sid,pos:[px,py],size:[320,100],flags:{},order:nid-1,mode:0,inputs:[],outputs:[],properties:{},title:title};
+   const sid=uid(),inst={id:++nid,type:sid,pos:[px,py],size:[NODE_W,TOP+10+PAD],flags:{},order:nid-1,mode:0,inputs:[],outputs:[],properties:{},title:title};
    const sin=[],sout=[],sl=[],rest=[],im={},om={};
    links.forEach(l=>{const o=l[1],os=l[2],t=l[3],ts=l[4],ty=l[5],a=set.has(o),b=set.has(t);
     if(a&&b)sl.push({id:l[0],origin_id:o,origin_slot:os,target_id:t,target_slot:ts,type:ty});
@@ -291,7 +300,7 @@ function build(){
    const keep=nodes.filter(n=>!set.has(n.id));
    keep.forEach(n=>n.outputs.forEach((o,k)=>{o.links=oo[n.id+":"+k]||[];}));
    inst.outputs.forEach((o,k)=>{o.links=oo[inst.id+":"+k]||[];});
-   inst.size=[320,50+24*Math.max(inst.inputs.length,inst.outputs.length)];
+   inst.size=[NODE_W,TOP+SLOT_SPACING*Math.max(inst.inputs.length,inst.outputs.length)+PAD+10*(inst.widgets_values||[]).length];
    const xs=gn.map(n=>n.pos[0]),ys=gn.map(n=>n.pos[1]),x0=Math.min(...xs)-420,x1=Math.max(...xs)+420,y0=Math.min(...ys);
    sin.forEach((q,i)=>{q.pos=[x0+20,y0+20+i*20];});sout.forEach((q,i)=>{q.pos=[x1+10,y0+20+i*20];});
    subs.push({id:sid,version:1,state:{lastGroupId:0,lastNodeId:nid,lastLinkId:lid,lastRerouteId:0},revision:0,config:{},name:title,inputNode:{id:-10,bounding:[x0,y0,150,Math.max(60,sin.length*20+40)]},outputNode:{id:-20,bounding:[x1,y0,130,Math.max(60,sout.length*20+40)]},inputs:sin,outputs:sout,widgets:[],nodes:gn,groups:[],links:sl,extra:{}});
