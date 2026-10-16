@@ -37,6 +37,7 @@ MODE_ALIASES = {
     "edit": "qwen-edit", "qwenedit": "qwen-edit", "qwen_edit": "qwen-edit",
     "qwen": "qwen21", "qwen2.1": "qwen21", "qwen-image": "qwen21", "qwen-2.1": "qwen21",
     "z-image": "zimage", "zit": "zimage", "z": "zimage",
+    "flux3": "flux3", "flux-3": "flux3", "flux3klein": "flux3", "flux3-base": "flux3", "f3": "flux3",
 }
 
 EPILOG = """\
@@ -47,6 +48,8 @@ Beispiele:
   mm.py image klein9b -i foto.png --run         FLUX.2 Klein 9B als Edit
   mm.py image qwen21 --turbo p8 --control --control-image pose.png --run
   mm.py image qwen-edit -i a.png -i b.png "Person aus Bild 2 in Szene 1" --run
+  mm.py image flux3 --run                       Flux 3 (Klein Base int8 + Gemma 4 + Prompt-Upsampler)
+  mm.py image flux3 --no-upsample --steps 28 --cfg 4.0 --run
 """
 
 
@@ -133,6 +136,18 @@ def cmd_video(a) -> int:
 # ───────────────────────────── image ─────────────────────────────
 
 def cmd_image(a) -> int:
+    """Build and save an image workflow from parsed CLI arguments.
+
+    Stage reference/control images and print a report. With ``a.run``, submit
+    the workflow to ComfyUI and download its images; ``a.start`` permits starting
+    the server. Save the workflow even if validation prevents submission.
+
+    Return 0 on success, 2 for an unknown mode, 3 for an unavailable execution
+    server, 4 for validation errors without ``a.force``, or 5 for no returned
+    images. Propagate SystemExit from prompt resolution, ModelMissing and
+    Unsupported from workflow building, OSError from file/network operations,
+    and RuntimeError from rejected, failed, or timed-out server execution.
+    """
     import mm_images as I
 
     cfg = C.load_config()
@@ -167,6 +182,7 @@ def cmd_image(a) -> int:
         steps=a.steps, cfg=a.cfg, seed=a.seed, sampler=a.sampler, scheduler=a.scheduler,
         batch=a.batch or img["batch"], loras=parse_loras(a.lora), turbo=a.turbo,
         variant=a.variant, unet=a.unet, clip=a.clip, vae=a.vae, images=staged,
+        upsampler=a.upsampler, no_upsample=a.no_upsample, upsample_max_tokens=a.upsample_tokens,
         control=a.control, control_image=ctrl, preprocess=a.preprocess,
         control_strength=a.control_strength, megapixels=a.megapixels, prefix=a.prefix,
     )
@@ -274,6 +290,11 @@ def cmd_check(a) -> int:
 # ───────────────────────────── Parser ─────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
+    """Return the CLI parser with subcommand handlers stored in ``fn``.
+
+    This does not parse arguments or run a command; legacy invocation handling
+    and the default video command are applied by ``main``.
+    """
     ap = argparse.ArgumentParser(prog="mm", description=__doc__, epilog=EPILOG,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd")
@@ -300,7 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.set_defaults(fn=cmd_video)
 
     i = sub.add_parser("image", help="Bild-Workflow erzeugen / ausfuehren")
-    i.add_argument("mode", help="krea2 | klein9b | klein4b | qwen-edit | qwen21 | zimage")
+    i.add_argument("mode", help="krea2 | klein9b | klein4b | qwen-edit | qwen21 | zimage | flux3")
     i.add_argument("items", nargs="*", help="Prompt-Text oder .txt; .json = Ausgabedatei")
     i.add_argument("-p", "--prompt")
     i.add_argument("-f", "--prompt-file")
@@ -319,6 +340,9 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--unet")
     i.add_argument("--clip")
     i.add_argument("--vae")
+    i.add_argument("--upsampler", help="nur flux3: Prompt-Upsampler (Dateiname/Teilstueck)")
+    i.add_argument("--no-upsample", action="store_true", help="nur flux3: Upsampler-Loop aus")
+    i.add_argument("--upsample-tokens", type=int, default=512, help="nur flux3: max. Tokens des Upsamplers")
     i.add_argument("-i", "--image", action="append", help="Referenzbild (mehrfach)")
     i.add_argument("--control", nargs="?", const="auto", help="ControlNet: auto|union|tile|depth")
     i.add_argument("--control-image")
