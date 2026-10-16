@@ -750,7 +750,10 @@ def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
     note(info, "VAE", vn)
     vae = o(g.add("VAELoader", vae_name=vn))
 
-    turbo = resolve_turbo(p, cat, info, uname)
+    # Flux 3 Base: Turbo-LoRAs nur auf expliziten Wunsch laden.
+    turbo = None
+    if (p.turbo or "auto").strip().lower() != "auto":
+        turbo = resolve_turbo(p, cat, info, uname)
     loras = ([(turbo.lora, 1.0)] if turbo else []) + user_loras(cat, p, info)
     model, clip = lora_full(g, model, clip, loras)
     steps, cfg, smp, sch = sampling(p, turbo, 25, 3.5)

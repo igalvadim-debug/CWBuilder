@@ -236,7 +236,7 @@ KIND_DIRS = {
     "controlnet": ("controlnet",),
     "model_patches": ("model_patches",),
     # Flux 3 Prompt-Upsampler (LLM, safetensors oder gguf) - via ChatGPT/LLMLoaderNodes
-    "llm": ("LLM", "text_enchancer", "diffusion_llms", "large_language_model", "models"),
+    "llm": ("LLM", "text_enchancer", "diffusion_llms", "large_language_model"),
 }
 EXTS = {".safetensors", ".sft", ".gguf", ".pth", ".pt", ".ckpt", ".bin"}
 SEP = "\\" if os.name == "nt" else "/"
