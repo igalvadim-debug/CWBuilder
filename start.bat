@@ -33,16 +33,18 @@ echo   [3] Bild    FLUX.2 Klein 9B
 echo   [4] Bild    Qwen Image 2.1
 echo   [5] Bild    Qwen Image Edit 2511
 echo   [6] Bild    Z-Image Turbo
-echo   [7] Modelle und Nodes pruefen
-echo   [8] Uebersicht (Modi, Turbo-LoRAs, Server)
+echo   [7] Bild    Flux 3 (Klein Base int8)
+echo   [8] Modelle und Nodes pruefen
+echo   [9] Uebersicht (Modi, Turbo-LoRAs, Server)
 echo   [0] prompt.txt bearbeiten
 echo   [Q] Ende
 echo.
-choice /c 123456780Q /n /m "Auswahl: "
-if errorlevel 10 goto :eof
-if errorlevel 9 goto edit
-if errorlevel 8 goto list
-if errorlevel 7 goto check
+choice /c 1234567890Q /n /m "Auswahl: "
+if errorlevel 11 goto :eof
+if errorlevel 10 goto edit
+if errorlevel 9 goto list
+if errorlevel 8 goto check
+if errorlevel 7 call :image flux3 & goto menu
 if errorlevel 6 call :image zimage & goto menu
 if errorlevel 5 call :image qwen-edit & goto menu
 if errorlevel 4 call :image qwen21 & goto menu
