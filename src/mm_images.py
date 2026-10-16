@@ -203,7 +203,9 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
         if inherent:
             info["notes"].append("Basismodell ist bereits ein Turbo-Modell - keine zusaetzliche Turbo-LoRA (erzwingen: --turbo <preset>)")
             return None
-        if not presets:
+        if not presets or p.mode == "flux3":
+            # flux3: Base ist kein Turbo-Modell und es gibt (noch) kein festes Preset -
+            # auto laedt keine Turbo-LoRA, nur ein explizites --turbo <lora> wirkt.
             return None
         key = next(iter(presets))
         try:
@@ -593,11 +595,7 @@ def flux3_upsampler_cands(p: Params) -> list:
 
 
 def flux3_clip_type(cat: Catalog) -> str | None:
-    """Return a supported CLIPLoader type, preserving its advertised spelling.
-
-    Match case-insensitively in order: flux3, flux 3, flux2, flux. Return None
-    if node metadata or matching options are unavailable.
-    """
+    """Erlaubte CLIPLoader-'type'-Werte der laufenden ComfyUI (z.B. 'flux', 'flux2')."""
     if not cat.object_info:
         return None
     opts = combo_options(cat.object_info.get("CLIPLoader", {}).get("input", {}).get("required", {}).get("type"))
@@ -611,11 +609,7 @@ def flux3_clip_type(cat: Catalog) -> str | None:
 
 
 def node_inputs(spec: dict, wanted: dict) -> dict | None:
-    """Filter wanted inputs to names declared required or optional by the node.
-
-    Return None if any required name is missing. Values are not validated;
-    a supplied None counts as present, and an empty result can be valid.
-    """
+    """Nur die Eingaben, die die Node wirklich verlangt (Pflicht-Eingaben vollstaendig?)."""
     inp = spec.get("input", {})
     req = set(inp.get("required", {}))
     opt = set(inp.get("optional", {}))
@@ -626,15 +620,7 @@ def node_inputs(spec: dict, wanted: dict) -> dict | None:
 
 
 def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -> list:
-    """Add prompt-upsample nodes and return a ``[node_id, output_slot]`` link.
-
-    Try dedicated nodes, loader/sampler pairs, then ChatGPT using the catalog's
-    node metadata and model candidates. Pass ``p.upsample_max_tokens`` to
-    supported token-limit inputs. This builds nodes without executing an LLM.
-    Return None if metadata or a suitable setup is unavailable. Update ``info``
-    with model selections, an offline warning, and seeds when considered;
-    these updates can occur even when no nodes are added.
-    """
+    """Prompt-Upsampler (LLM) - liefert einen STRING-Ausgang. None, wenn nichts passt."""
     if not cat.object_info:
         warn(info, "ComfyUI laeuft nicht - Prompt-Upsampler kann nicht geprueft werden "
                    "(mit laufendem Server erneut pruefen: mm.py check).")
@@ -657,7 +643,7 @@ def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -
                 wanted[tname] = up_st
         if "api" in allowed:
             if not up_st:
-                continue
+                continue   # Node braucht ein API-Modell - naechsten Kandidaten versuchen
             wanted["api"] = up_st
             note(info, "Prompt-Upsampler (API)", up_st)
         for tname in ("max_tokens", "max_new_tokens"):
@@ -718,18 +704,11 @@ def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -
 
 
 def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
-    """Return a Flux 3 graph with decoding and image-saving nodes.
+    """Flux 3 (Klein Base int8): Gemma-4-Text-Encoder + optionaler Prompt-Upsampler.
 
-    Apply selected LoRAs and condition on all reference images. Unless an
-    explicit size is requested, use the first reference's dimensions after
-    scaling to ``p.megapixels``. Attempt prompt upsampling unless disabled;
-    keep the original prompt with a warning if no suitable setup is found.
-    Update ``info`` with model, warning, seed, and sampling details.
-
-    With ``turbo="auto"``, apply no Turbo-LoRA and retain base sampling defaults.
-    Propagate ModelMissing for required models or explicitly requested LoRAs.
-    Raise Unsupported if ``p.control`` is truthy. Building does not execute
-    the workflow or save images locally.
+    Turbo: 'auto' wendet keine Turbo-LoRA an (Standard 25 Steps / CFG 3.5);
+    eine Turbo/Destillat-LoRA wirkt nur, wenn sie explizit mit --turbo <lora>
+    verlangt wird ('off' deaktiviert sie ebenfalls).
     """
     g = Graph()
     kind, uname = pick_unet(cat, [p.unet] if p.unet else FLUX3_UNET_CANDS)
@@ -750,10 +729,7 @@ def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
     note(info, "VAE", vn)
     vae = o(g.add("VAELoader", vae_name=vn))
 
-    # Flux 3 Base: Turbo-LoRAs nur auf expliziten Wunsch laden.
-    turbo = None
-    if (p.turbo or "auto").strip().lower() != "auto":
-        turbo = resolve_turbo(p, cat, info, uname)
+    turbo = resolve_turbo(p, cat, info, uname)
     loras = ([(turbo.lora, 1.0)] if turbo else []) + user_loras(cat, p, info)
     model, clip = lora_full(g, model, clip, loras)
     steps, cfg, smp, sch = sampling(p, turbo, 25, 3.5)

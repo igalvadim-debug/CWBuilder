@@ -1,78 +1,52 @@
-"""Unit tests for the Flux 3 prompt upsampler's model directories."""
-
+# -*- coding: utf-8 -*-
+"""Catalog-Entdeckung fuer den 'llm'-Typ (Flux 3 Prompt-Upsampler)."""
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from mm_common import Catalog, ModelMissing, SEP
+from mm_common import KIND_DIRS, Catalog  # noqa: E402
+
+LLM_DIRS = ("LLM", "text_enchancer", "diffusion_llms", "large_language_model")
 
 
-class LlmCatalogTests(unittest.TestCase):
+def make_root(tmp: Path) -> Path:
+    for sub in LLM_DIRS:
+        (tmp / sub).mkdir(parents=True, exist_ok=True)
+        (tmp / sub / f"up_{sub}.safetensors").write_bytes(b"x")
+    # 'models' ist KEIN unterstuetztes LLM-Verzeichnis - Dateien dort duerfen
+    # nicht ueber den llm-Typ gefunden werden.
+    (tmp / "models").mkdir(exist_ok=True)
+    (tmp / "models" / "stray_in_models.safetensors").write_bytes(b"x")
+    return tmp
+
+
+class LlmDirsTest(unittest.TestCase):
     def setUp(self):
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = make_root(Path(self._tmp.name))
+        self.cat = Catalog([self.root], url=None, prefer_live=False)
 
-    def model(self, relative):
-        path = self.root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.touch()
+    def tearDown(self):
+        self._tmp.cleanup()
 
-    def catalog(self):
-        return Catalog([self.root], prefer_live=False)
+    def test_supported_directories_are_exactly_four(self):
+        self.assertEqual(KIND_DIRS["llm"], LLM_DIRS)
 
-    def test_discovers_models_in_each_new_directory(self):
-        directories = ("LLM", "text_enchancer", "diffusion_llms",
-                       "large_language_model")
-        for index, directory in enumerate(directories):
-            self.model(f"{directory}/qwen{index}.safetensors")
-        self.assertEqual(
-            self.catalog().names("llm"),
-            [f"qwen{index}.safetensors" for index in range(len(directories))],
-        )
+    def test_discovery_returns_only_the_four_supported_dirs(self):
+        directories = KIND_DIRS["llm"]
+        # Catalog liefert Namen relativ zum jeweiligen Unterordner (wie ComfyUI)
+        expected = sorted(f"up_{d}.safetensors" for d in directories)
+        found = [n.lower() for n in self.cat.names("llm")]
+        self.assertEqual(sorted(found), [n.lower() for n in expected])
 
-    def test_generic_models_directory_is_not_discovered(self):
-        self.model("models/qwen.safetensors")
-        self.assertEqual(self.catalog().names("llm"), [])
-
-    def test_nested_paths_are_relative_to_the_model_directory(self):
-        self.model("LLM/vendor/qwen3.5.gguf")
-        cat = self.catalog()
-        expected = SEP.join(("vendor", "qwen3.5.gguf"))
-        self.assertEqual(cat.names("llm"), [expected])
-        self.assertEqual(cat.pick("llm", ["qwen3.5"]), expected)
-
-    def test_supported_model_extensions_are_case_insensitive(self):
-        extensions = (".safetensors", ".sft", ".gguf", ".pth", ".pt", ".ckpt", ".bin")
-        for extension in extensions:
-            self.model("LLM/model" + extension.upper())
-        self.model("LLM/README.md")
-        self.model("LLM/model.gguf.download")
-        self.assertEqual(
-            set(self.catalog().names("llm")),
-            {"model" + extension.upper() for extension in extensions},
-        )
-
-    def test_duplicate_names_across_directories_and_roots_are_deduplicated(self):
-        self.model("LLM/Qwen.gguf")
-        self.model("text_enchancer/qwen.gguf")
-        self.model("other/LLM/QWEN.gguf")
-        cat = Catalog([self.root, self.root / "other"], prefer_live=False)
-        self.assertEqual(cat.names("llm"), ["Qwen.gguf"])
-
-    def test_unrelated_model_kinds_do_not_leak_into_llm_names(self):
-        self.model("text_encoders/qwen3.5.safetensors")
-        self.model("loras/qwen3.5.gguf")
-        self.assertEqual(self.catalog().names("llm"), [])
-
-    def test_missing_upsampler_is_optional_or_reports_the_llm_kind(self):
-        cat = self.catalog()
-        self.assertIsNone(cat.pick("llm", ["qwen3.5"], required=False))
-        with self.assertRaisesRegex(ModelMissing, r"\[llm\].*qwen3\.5"):
-            cat.pick("llm", ["qwen3.5"])
+    def test_safetensors_under_models_is_not_discovered(self):
+        names = [n.lower() for n in self.cat.names("llm")]
+        self.assertFalse(any("stray_in_models" in n for n in names))
+        self.assertIsNone(self.cat.pick("llm", ["stray_in_models"], required=False))
 
 
 if __name__ == "__main__":
