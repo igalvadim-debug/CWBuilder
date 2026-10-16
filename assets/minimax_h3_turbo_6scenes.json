@@ -1,0 +1,246 @@
+{
+  "id": "minimax-h3-turbo-6scenes",
+  "revision": 0,
+  "last_node_id": 8,
+  "last_link_id": 8,
+  "nodes": [
+    {
+      "class_type": "H3ModelLoaderAny",
+      "_id": 1,
+      "inputs": {
+        "model_path": "D:/ComfyUiCuda/models/diffusion_models/minimax_h3_fl2va_pruned_w6a8.safetensors",
+        "dtype": "fp8",
+        "device": "cuda"
+      },
+      "outputs": {
+        "MODEL": {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [1],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "H3ClipLoaderAny",
+      "_id": 2,
+      "inputs": {
+        "clip_path": "D:/ComfyUiCuda/models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "dtype": "fp8",
+        "device": "cuda"
+      },
+      "outputs": {
+        "CLIP": {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [2],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "VAELoader",
+      "_id": 3,
+      "inputs": {
+        "vae_name": "D:/ComfyUiCuda/models/vae/minimax_h3_video_vae_fp16.safetensors"
+      },
+      "outputs": {
+        "VAE": {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [3, 4],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "VAELoader",
+      "_id": 4,
+      "inputs": {
+        "vae_name": "D:/ComfyUiCuda/models/vae/minimax_h3_audio_vae_fp32.safetensors"
+      },
+      "outputs": {
+        "VAE": {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [5],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "LoraLoaderModelOnly",
+      "_id": 5,
+      "inputs": {
+        "model": [1, 0, "MODEL"],
+        "lora_name": "D:/ComfyUiCuda/models/loras/minimax/H3_Motion_BoosterV2.safetensors",
+        "strength_model": 1.0,
+        "strength_clip": 1.0
+      },
+      "outputs": {
+        "MODEL": {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [6],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "LoraLoaderModelOnly",
+      "_id": 6,
+      "inputs": {
+        "model": [5, 0, "MODEL"],
+        "lora_name": "D:/ComfyUiCuda/models/loras/minimax/TaoMate-H3-3step.safetensors",
+        "strength_model": 0.8,
+        "strength_clip": 1.0
+      },
+      "outputs": {
+        "MODEL": {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [7],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "MuseMinimaxDirector",
+      "_id": 7,
+      "inputs": {
+        "mode": "Reference (Omni) — up to 9 images, 3 videos, 3 audio",
+        "model": [6, 0, "MODEL"],
+        "clip": [2, 0, "CLIP"],
+        "vae": [3, 0, "VAE"],
+        "audio_vae": [4, 0, "VAE"],
+        "aspect_ratio": "WIDESCREEN_H",
+        "megapixels": 0.92,
+        "multiple": 32,
+        "resize_method": "crop",
+        "duration_seconds": 30.0,
+        "chunk_duration_seconds": 5.0,
+        "ref_image_size": "match",
+        "hybrid_continuation": false,
+        "seed": 42,
+        "steps": 3,
+        "sampler_name": "res_multistep",
+        "scheduler": "simple",
+        "shift_video": 12.0,
+        "shift_audio": 3.0,
+        "timeline_data": "{\"characters\": [{\"file\": \"character_1.png\", \"description\": \"the young woman with short silver hair, cyberpunk jacket, neon blue eyes, athletic build, confident posture\", \"retention\": \"fully_preserved\"}, {\"file\": \"character_2.png\", \"description\": \"the tall man in tactical vest, dark messy hair, scar across left cheek, cybernetic left arm glowing faint orange\", \"retention\": \"fully_preserved\"}], \"background\": null, \"style_line\": \"Cyberpunk neo-Tokyo 2087, rain-slicked streets, holographic advertisements bleeding magenta and cyan into puddles, volumetric fog, anamorphic lens flares, 35mm film grain, high contrast rim lighting, kinetic camera movement\" , \"dialogue_language\": \"English\", \"segments\": [{\"label\": \"CUT 1\", \"prompt\": \"[Shot 1] At 00:00.000, <Subject 1> sprints across a rain-slicked rooftop, neon signs streaking behind her — magnetic boots sparking on wet metal. She vaults a ventilation unit, lands in a crouch, spins drawing twin pulse pistols. <d>[English] You're late, Kael!</d> <Subject 2> drops from a zipline behind her, cybernetic arm whirring, boots hitting concrete with a heavy thud. He racks his rifle in one smooth motion. <d>[English] Traffic was hell. You owe me dinner.</d>\", \"weight\": 5, \"speakerCharIdxs\": [0, 1]}, {\"label\": \"CUT 2\", \"prompt\": \"[Shot 2] At 00:05.000, <Subject 1> and <Subject 2> back-to-back in a narrow alley, drones descending from smog-choked sky — red targeting lasers painting the wet walls. <Subject 1> fires upward, pulse rounds tracing electric arcs, each hit blooming into silent EMP bursts. <d>[English] Three o'clock! Go high!</d> <Subject 2> launches himself off a dumpster, cybernetic arm extending a grappling line — he swings UP, inverting, rifle barking controlled bursts. <d>[English] On it! Cover me!</d> Debris rains down, neon reflections shattered in slow motion.\", \"weight\": 5, \"speakerCharIdxs\": [0, 1]}, {\"label\": \"CUT 3\", \"prompt\": \"[Shot 3] At 00:10.000, <Subject 1> slides under a collapsing hologram billboard — massive corporate logo fracturing into glass shards caught in bullet time. She rolls, comes up firing one-handed, the other hand grabbing <Subject 2>'s vest yanking him through the zero-gravity debris field. <d>[English] Move YOUR ass!</d> <Subject 2> twists mid-air, fires backwards without looking, takes out a pursuer drone. <d>[English] Charming. Remind me why I partnered with you?</d> They land on a mag-lev train roof, magnetic locks engaging with sharp CLACKS.\", \"weight\": 5, \"speakerCharIdxs\": [0, 1]}, {\"label\": \"CUT 4\", \"prompt\": \"[Shot 4] At 00:15.000, train blurring through neon canyons at 300 km/h — wind tearing at coats, rain horizontal. <Subject 1> sprints FORWARD along the curved roof, pistols tracking targets on adjacent train. <Subject 2> runs BACKWARDS covering her, cybernetic arm deployed as riot shield deflecting plasma bolts. <d>[English] Left car! Jump on three!</d> <d>[English] Two... ONE!</d> They leap the gap between trains in perfect sync — slow motion, neon trails painting their silhouettes, impact shuddering through metal.\", \"weight\": 5, \"speakerCharIdxs\": [0, 1]}, {\"label\": \"CUT 5\", \"prompt\": \"[Shot 5] At 00:20.000, inside the target train car — corporate executives in smart-fabric suits, bodyguards raising smart-rifles. <Subject 1> breaches through the window in a shower of smart-glass, lands rolling, comes up with pistols pressed to two throats simultaneously. <d>[English] Package. Now. No negotiation.</d> <Subject 2> crashes through opposite window, rifle sweeping, voice calm over chaos. <d>[English] Hands where I see them. Nobody dies today unless they choose to.</d> A tense standoff — rain hammering the broken windows, targeting lasers painting everyone's forehead.\", \"weight\": 5, \"speakerCharIdxs\": [0, 1]}, {\"label\": \"CUT 6\", \"prompt\": \"[Shot 6] At 00:25.000, extraction — <Subject 1> tosses a data drive to <Subject 2>, he catches it mid-sprint toward the rear hatch. She stays, covering, pistols dancing — every shot a neon brushstroke. <d>[English] Go! I'm right behind you!</d> <Subject 2> pauses at the hatch, looks back, cybernetic arm whining as it charges. <d>[English] Like hell. Together or not at all.</d> He fires a grappling line BACK to her, she catches it — they launch together through the hatch into night sky, mag-levs streaking below, neon city swallowing them whole. <d>[English] Dinner's on you.</d> <d>[English] Wouldn't have it any other way.</d>\", \"weight\": 5, \"speakerCharIdxs\": [0, 1]}], \"refVideos\": [], \"refAudios\": []}"
+      },
+      "outputs": {
+        "images": {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [7],
+          "shape": 3,
+          "slot_index": 0
+        },
+        "audio": {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [8],
+          "shape": 3,
+          "slot_index": 1
+        },
+        "compiled_prompt": {
+          "name": "compiled_prompt",
+          "type": "STRING",
+          "links": [],
+          "shape": 3,
+          "slot_index": 2
+        }
+      }
+    },
+    {
+      "class_type": "VHS_VideoCombine",
+      "_id": 8,
+      "inputs": {
+        "filename_prefix": "h3_turbo_6scenes",
+        "images": [7, 0, "IMAGE"],
+        "audio": [7, 1, "AUDIO"],
+        "format": "mp4",
+        "codec": "h264",
+        "crf": 18,
+        "save_output": true,
+        "videopreview": true,
+        "fps": 24,
+        "frame_count": 720,
+        "metadata": "{\"title\": \"Minimax H3 Turbo 6-Scene Action\", \"scenes\": 6, \"duration\": \"30s\"}"
+      },
+      "outputs": {
+        "output": {
+          "name": "output",
+          "type": "VIDEO",
+          "links": [],
+          "shape": 3
+        },
+        "filename": {
+          "name": "filename",
+          "type": "STRING",
+          "links": [],
+          "shape": 3
+        }
+      }
+    }
+  ],
+  "links": [
+    [1, 1, 0, 5, 0, "MODEL"],
+    [2, 2, 0, 7, 2, "CLIP"],
+    [3, 3, 0, 7, 3, "VAE"],
+    [4, 4, 0, 7, 4, "AUDIO_VAE"],
+    [5, 5, 0, 6, 0, "MODEL"],
+    [6, 6, 0, 7, 0, "MODEL"],
+    [7, 7, 0, 8, 0, "IMAGE"],
+    [8, 7, 1, 8, 1, "AUDIO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "hwui": {
+      "fnMap": {},
+      "queuedNodes": {},
+      "nodeOutputs": {}
+    },
+    "version": "0.4"
+  },
+  "models": [
+    {
+      "name": "minimax_h3_fl2va_pruned_w6a8.safetensors",
+      "url": "local",
+      "directory": "diffusion_models/"
+    },
+    {
+      "name": "minimax_h3_video_vae_fp16.safetensors",
+      "url": "local",
+      "directory": "vae/"
+    },
+    {
+      "name": "minimax_h3_audio_vae_fp32.safetensors",
+      "url": "local",
+      "directory": "vae/"
+    },
+    {
+      "name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "url": "local",
+      "directory": "text_encoders/"
+    },
+    {
+      "name": "H3_Motion_BoosterV2.safetensors",
+      "url": "local",
+      "directory": "loras/minimax/"
+    },
+    {
+      "name": "TaoMate-H3-3step.safetensors",
+      "url": "local",
+      "directory": "loras/minimax/"
+    }
+  ]
+}

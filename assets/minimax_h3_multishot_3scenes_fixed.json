@@ -1,0 +1,529 @@
+{
+  "id": "h3-multishot-workflow-v2-fixed",
+  "revision": 0,
+  "last_node_id": 20,
+  "last_link_id": 40,
+  "nodes": [
+    {
+      "class_type": "H3Director",
+      "_id": 1,
+      "inputs": {
+        "episode_id": "character_dialogue_scene_001",
+        "num_shots": 3,
+        "character_ref": "character_reference_image",
+        "output_dir": "D:/claudeAgent/Coder/projects/Minimax_test/output/h3_multishot",
+        "character_seed_base": 1000,
+        "consistency_strength": 0.85,
+        "lip_sync_audio": true,
+        "output_fps": 24,
+        "output_resolution": "1280x720"
+      },
+      "outputs": {
+        "episode_state": {
+          "name": "episode_state",
+          "type": "H3_EPISODE_STATE",
+          "links": [1],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "H3MultiShotManager",
+      "_id": 2,
+      "inputs": {
+        "director_output": [1, 0, "H3_EPISODE_STATE"],
+        "transition_type": "fade",
+        "transition_duration_frames": 12,
+        "seed_chain_method": "sequential",
+        "character_embedding_mode": "extract_and_preserve",
+        "face_restoration": true,
+        "temporal_consistency": true
+      },
+      "outputs": {
+        "shot_sequence": {
+          "name": "shot_sequence",
+          "type": "H3_SHOT_SEQUENCE",
+          "links": [2],
+          "shape": 3,
+          "slot_index": 0
+        },
+        "character_embedding": {
+          "name": "character_embedding",
+          "type": "CHARACTER_EMBEDDING",
+          "links": [],
+          "shape": 3
+        }
+      }
+    },
+    {
+      "class_type": "LoadImage",
+      "_id": 3,
+      "inputs": {
+        "image": "first_frame.png",
+        "channel": "rgb"
+      },
+      "outputs": {
+        "IMAGE": {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [3],
+          "shape": 3,
+          "slot_index": 0
+        },
+        "MASK": {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [],
+          "shape": 3
+        }
+      }
+    },
+    {
+      "class_type": "H3X2ImageToVideo",
+      "_id": 4,
+      "inputs": {
+        "image": [3, 0, "IMAGE"],
+        "prompt": "detailed description of the scene, cinematic lighting, high quality",
+        "negative_prompt": "blurry, low quality, distorted, ugly, deformed",
+        "width": 1280,
+        "height": 720,
+        "frames": 120,
+        "fps": 24,
+        "motion_bucket": 127,
+        "cfg_scale": 7.5,
+        "steps": 30,
+        "min_cfg": 1.0,
+        "guidance": 3.5,
+        "video_init": false,
+        "image_init": false,
+        "mask_image": null,
+        "mask_blur": 4,
+        "palette": "auto",
+        "seed": 1000,
+        "batch_count": 1
+      },
+      "outputs": {
+        "latent": {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [4],
+          "shape": 3,
+          "slot_index": 0
+        },
+        "image": {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [5, 6],
+          "shape": 3,
+          "slot_index": 1
+        }
+      }
+    },
+    {
+      "class_type": "VAEDecode",
+      "_id": 5,
+      "inputs": {
+        "samples": [4, 0, "LATENT"],
+        "vae": [7, 0, "VAE"]
+      },
+      "outputs": {
+        "IMAGE": {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [7],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "VHS_VideoCombine",
+      "_id": 6,
+      "inputs": {
+        "filename_prefix": "h3_multishot_scene",
+        "images": [5, 0, "IMAGE"],
+        "audio": [8, 0, "AUDIO"],
+        "format": "mp4",
+        "codec": "h264",
+        "crf": 23,
+        "save_output": true,
+        "videopreview": true,
+        "fps": 24,
+        "frame_count": 120,
+        "video_cluster": "scene_01",
+        "metadata": "{\"scene_id\": 1, \"character\": \"main_character\", \"prompt\": \"woman smiling\"}"
+      },
+      "outputs": {
+        "output": {
+          "name": "output",
+          "type": "VIDEO",
+          "links": [],
+          "shape": 3
+        },
+        "filename": {
+          "name": "filename",
+          "type": "STRING",
+          "links": [],
+          "shape": 3
+        }
+      }
+    },
+    {
+      "class_type": "VAELoader",
+      "_id": 7,
+      "inputs": {
+        "vae_name": "sdxl_vae.safetensors"
+      },
+      "outputs": {
+        "VAE": {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [8],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "LoadAudio",
+      "_id": 8,
+      "inputs": {
+        "audio_file": "audio_scene1.wav",
+        "normalize": true,
+        "sample_rate": 44100,
+        "mono": true
+      },
+      "outputs": {
+        "audio": {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [9],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "LoadImage",
+      "_id": 9,
+      "inputs": {
+        "image": "character_reference.png",
+        "channel": "rgb"
+      },
+      "outputs": {
+        "IMAGE": {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [10, 11, 12],
+          "shape": 3,
+          "slot_index": 0
+        },
+        "MASK": {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [],
+          "shape": 3
+        }
+      }
+    },
+    {
+      "class_type": "H3EpisodeBuilder",
+      "_id": 10,
+      "inputs": {
+        "shot_sequence": [2, 0, "H3_SHOT_SEQUENCE"],
+        "character_embedding": [2, 1, "CHARACTER_EMBEDDING"],
+        "transition_type": "fade",
+        "transition_duration_frames": 12,
+        "blend_mode": "normal",
+        "output_fps": 24,
+        "output_resolution": "1280x720",
+        "audio_mixing": "sequential",
+        "audio_crossfade": 1.0,
+        "merge_method": "seamless_concatenation",
+        "output_format": "mp4",
+        "codec": "h264",
+        "crf": 23,
+        "audio_codec": "aac",
+        "audio_bitrate": "320k"
+      },
+      "outputs": {
+        "final_video": {
+          "name": "final_video",
+          "type": "VIDEO",
+          "links": [10],
+          "shape": 3,
+          "slot_index": 0
+        },
+        "episode_info": {
+          "name": "episode_info",
+          "type": "JSON",
+          "links": [],
+          "shape": 3
+        }
+      }
+    },
+    {
+      "class_type": "SaveImage",
+      "_id": 11,
+      "inputs": {
+        "filename_prefix": "character_reference_output",
+        "images": [9, 0, "IMAGE"],
+        "filename": "character_reference_output.png",
+        "embed_png_info": true,
+        "save_path": "D:/claudeAgent/Coder/projects/Minimax_test/output/character_reference.png"
+      }
+    },
+    {
+      "class_type": "H3CharacterReferenceExtractor",
+      "_id": 12,
+      "inputs": {
+        "character_image": [9, 0, "IMAGE"],
+        "extraction_method": "face_embedding",
+        "preserve_clothing": true,
+        "preserve_hair": true,
+        "preserve_pose": false,
+        "embeddings_only": false,
+        "output_embedding_file": "character_embedding_001.npy"
+      },
+      "outputs": {
+        "character_embedding": {
+          "name": "character_embedding",
+          "type": "CHARACTER_EMBEDDING",
+          "links": [11],
+          "shape": 3,
+          "slot_index": 0
+        },
+        "reference_image": {
+          "name": "reference_image",
+          "type": "IMAGE",
+          "links": [],
+          "shape": 3
+        }
+      }
+    },
+    {
+      "class_type": "IPAdapterAdvanced",
+      "_id": 13,
+      "inputs": {
+        "ip_adapter": [14, 0, "IP_ADAPTER"],
+        "image": [9, 0, "IMAGE"],
+        "image_cond": null,
+        "t5_text_embedding": [16, 0, "T5_TEXT_EMBEDDING"],
+        "image_embeds": [12, 0, "CHARACTER_EMBEDDING"],
+        "image_clip_embeds": [17, 0, "CLIP_EMBEDDING"],
+        "style_strength": 0.75,
+        "noise_augmentation": 0.0,
+        "combine_embeds": "concat",
+        "dropout": 0.0,
+        "multicrop_bbox": "False",
+        "multicrop_bbox_thresh": 0.5,
+        "multicrop_clipvision": "sd3_large",
+        "multicrop_use_cls_token": false,
+        "multicrop_bbox_use_cls": false,
+        "multicrop_bbox_type": "yolov8"
+      },
+      "outputs": {
+        "image_embeds": {
+          "name": "image_embeds",
+          "type": "T5_TEXT_EMBEDDING",
+          "links": [12],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "IPAdapterLoader",
+      "_id": 14,
+      "inputs": {
+        "ip_adapter_path": "ipadapter_flux_full.safetensors"
+      },
+      "outputs": {
+        "ip_adapter": {
+          "name": "ip_adapter",
+          "type": "IP_ADAPTER",
+          "links": [13],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "CLIPTextEncodeAdvanced",
+      "_id": 15,
+      "inputs": {
+        "clip": [18, 0, "CLIP"],
+        "t5_text_embedding": [16, 0, "T5_TEXT_EMBEDDING"],
+        "clip_l_text_embedding": [19, 0, "CLIP_EMBEDDING"],
+        "clip_g_text_embedding": [16, 0, "T5_TEXT_EMBEDDING"],
+        "conditioning_type": "both",
+        "concat_conditioning": false,
+        "mix_clip_l": 1.0,
+        "mix_clip_g": 0.0,
+        "mix_t5": 1.0,
+        "t5_scale": 1.0,
+        "t5_scale_clip_g": 1.0,
+        "t5_scale_clip_l": 1.0,
+        "t5_scale_cross_attn": 1.0,
+        "t5_scale_self_attn": 1.0,
+        "apply_ipadapter": true,
+        "ipadapter_style_strength": 0.75,
+        "apply_refnet": false,
+        "refnet_strength": 1.0,
+        "refnet_start": 0.0,
+        "refnet_end": 1.0
+      },
+      "outputs": {
+        "CONDITIONING": {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [14],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "CLIPLoader",
+      "_id": 16,
+      "inputs": {
+        "clip_name": "clip_l.safetensors",
+        "type": "clip_l"
+      },
+      "outputs": {
+        "clip": {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [15],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "T5TextEncoderFromTransformer",
+      "_id": 17,
+      "inputs": {
+        "transformer": [18, 0, "CLIP"],
+        "dtype": "float16",
+        "device": "cuda"
+      },
+      "outputs": {
+        "t5_text_embedding": {
+          "name": "t5_text_embedding",
+          "type": "T5_TEXT_EMBEDDING",
+          "links": [16],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "CLIPVisionEncode",
+      "_id": 18,
+      "inputs": {
+        "clip_vision": [19, 0, "CLIP_VISION"],
+        "image": [9, 0, "IMAGE"],
+        "crop": "False"
+      },
+      "outputs": {
+        "clip_vision_output": {
+          "name": "clip_vision_output",
+          "type": "CLIP_VISION_OUTPUT",
+          "links": [17],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "CLIPVisionLoader",
+      "_id": 19,
+      "inputs": {
+        "clip_vision_name": "clip_vision_h.safetensors"
+      },
+      "outputs": {
+        "clip_vision": {
+          "name": "clip_vision",
+          "type": "CLIP_VISION",
+          "links": [18],
+          "shape": 3,
+          "slot_index": 0
+        }
+      }
+    },
+    {
+      "class_type": "H3VideoPreview",
+      "_id": 20,
+      "inputs": {
+        "video": [10, 0, "VIDEO"],
+        "autoplay": true,
+        "loop": true
+      },
+      "outputs": {
+        "preview": {
+          "name": "preview",
+          "type": "VIDEO_PREVIEW",
+          "links": [],
+          "shape": 3
+        }
+      }
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "H3_EPISODE_STATE"],
+    [2, 2, 0, 10, 0, "H3_SHOT_SEQUENCE"],
+    [3, 3, 0, 4, 0, "IMAGE"],
+    [4, 4, 0, 5, 0, "LATENT"],
+    [5, 4, 1, 6, 0, "IMAGE"],
+    [6, 4, 1, 11, 0, "IMAGE"],
+    [7, 7, 0, 5, 1, "VAE"],
+    [8, 8, 0, 6, 1, "AUDIO"],
+    [9, 9, 0, 12, 0, "IMAGE"],
+    [10, 9, 0, 13, 1, "IMAGE"],
+    [11, 9, 0, 18, 1, "IMAGE"],
+    [12, 12, 0, 13, 4, "CHARACTER_EMBEDDING"],
+    [13, 13, 0, 15, 4, "T5_TEXT_EMBEDDING"],
+    [14, 14, 0, 13, 0, "IP_ADAPTER"],
+    [15, 16, 0, 15, 0, "CLIP"],
+    [16, 17, 0, 13, 2, "T5_TEXT_EMBEDDING"],
+    [17, 17, 0, 13, 5, "CLIP_EMBEDDING"],
+    [18, 18, 0, 15, 0, "CLIP"],
+    [19, 18, 0, 17, 0, "CLIP"],
+    [20, 19, 0, 18, 0, "CLIP_VISION"],
+    [21, 10, 0, 20, 0, "VIDEO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "hwui": {
+      "fnMap": {},
+      "queuedNodes": {},
+      "nodeOutputs": {}
+    },
+    "version": "0.4"
+  },
+  "models": [
+    {
+      "name": "sdxl_vae.safetensors",
+      "url": "https://huggingface.co/stabilityai/sdxl-vae/blob/main/sdxl_vae.safetensors",
+      "directory": "models/vae/"
+    },
+    {
+      "name": "ipadapter_flux_full.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/IPAdapter_Flux_ComfyUI_Repackaged/blob/main/ipadapter_flux_full.safetensors",
+      "directory": "models/ip_adapter/"
+    },
+    {
+      "name": "clip_l.safetensors",
+      "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/blob/main/clip_l.safetensors",
+      "directory": "models/text_encoders/"
+    },
+    {
+      "name": "clip_vision_h.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/blob/main/clip_vision_h.safetensors",
+      "directory": "models/clip_vision/"
+    }
+  ]
+}

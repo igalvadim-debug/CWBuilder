@@ -1,0 +1,6 @@
+/imagine prompt: character reference sheet DUO, cyberpunk neo-Tokyo 2087 partners -- LEFT: tall athletic man, tactical
+  matte-black vest, dark messy hair, jagged scar left cheek to jaw, advanced cybernetic left arm exposed carbon-fiber
+  glowing orange coolant channels -- RIGHT: young athletic woman, short silver-white asymmetric undercut, icy neon-blue
+  cybernetic eyes, form-fitting matte-charcoal jacket hex-weave cyan magnetic seals -- back-to-back confident stance,
+  rain-slicked rooftop, holographic magenta cyan kanji reflections, volumetric fog, anamorphic flares, 35mm grain, high
+  contrast rim lighting, orthographic insets, clean neutral gray background --ar 16:9 --style raw --stylize 250 --v 6.0
