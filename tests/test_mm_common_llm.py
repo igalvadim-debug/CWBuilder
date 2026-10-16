@@ -26,13 +26,17 @@ class LlmCatalogTests(unittest.TestCase):
 
     def test_discovers_models_in_each_new_directory(self):
         directories = ("LLM", "text_enchancer", "diffusion_llms",
-                       "large_language_model", "models")
+                       "large_language_model")
         for index, directory in enumerate(directories):
             self.model(f"{directory}/qwen{index}.safetensors")
         self.assertEqual(
             self.catalog().names("llm"),
             [f"qwen{index}.safetensors" for index in range(len(directories))],
         )
+
+    def test_generic_models_directory_is_not_discovered(self):
+        self.model("models/qwen.safetensors")
+        self.assertEqual(self.catalog().names("llm"), [])
 
     def test_nested_paths_are_relative_to_the_model_directory(self):
         self.model("LLM/vendor/qwen3.5.gguf")

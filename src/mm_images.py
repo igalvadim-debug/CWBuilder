@@ -626,7 +626,7 @@ def node_inputs(spec: dict, wanted: dict) -> dict | None:
 
 
 def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -> list:
-    """Add prompt-upsample nodes and return a ``[node_id, 0]`` output link.
+    """Add prompt-upsample nodes and return a ``[node_id, output_slot]`` link.
 
     Try dedicated nodes, loader/sampler pairs, then ChatGPT using the catalog's
     node metadata and model candidates. Pass ``p.upsample_max_tokens`` to
@@ -657,7 +657,7 @@ def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -
                 wanted[tname] = up_st
         if "api" in allowed:
             if not up_st:
-                break
+                continue
             wanted["api"] = up_st
             note(info, "Prompt-Upsampler (API)", up_st)
         for tname in ("max_tokens", "max_new_tokens"):
@@ -674,7 +674,7 @@ def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -
             continue
         nid = g.add(cls, **ins)
         note(info, "Prompt-Upsampler", f"{cls}" + (f" + '{up_st}'" if up_st else ""))
-        return o(nid, 0)
+        return o(nid, outs.index("STRING"))
 
     # 2) Loader+Sampler-Paare (LLM-Server-Nodes, gguf oder safetensors)
     for lcls, scls in (("LLMSSRGLoader", "LLMSimpleTextGen"), ("LLMLoader", "LLMSampler")):
@@ -726,8 +726,8 @@ def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
     keep the original prompt with a warning if no suitable setup is found.
     Update ``info`` with model, warning, seed, and sampling details.
 
-    Propagate ModelMissing for required models or explicitly requested LoRAs;
-    a missing automatic Turbo-LoRA instead produces a warning and is skipped.
+    With ``turbo="auto"``, apply no Turbo-LoRA and retain base sampling defaults.
+    Propagate ModelMissing for required models or explicitly requested LoRAs.
     Raise Unsupported if ``p.control`` is truthy. Building does not execute
     the workflow or save images locally.
     """

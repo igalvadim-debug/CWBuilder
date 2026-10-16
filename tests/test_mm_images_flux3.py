@@ -1,7 +1,6 @@
 """Flux 3 unit tests using synthetic ComfyUI schemas and empty model files.
 
 No ComfyUI process, model weights, network access, or extra packages are needed.
-Expected failures document two existing compatibility defects in the PR.
 """
 
 import sys
@@ -284,18 +283,16 @@ class Flux3UpsamplerTests(Flux3TestCase):
         self.assertEqual(len(graph), 1)
         self.one(graph, "Flux3PromptUpsampler")
 
-    @unittest.expectedFailure
     def test_regression_string_output_can_be_after_another_output(self):
-        """PR defect: the adapter returns slot 0 even when STRING is at slot 1."""
+        """The adapter links the STRING output even when it follows another output."""
         result, graph, _ = self.upsample({
             "Flux3PromptUpsampler": schema(("prompt",), output=("IMAGE", "STRING")),
         })
         nid, _ = self.one(graph, "Flux3PromptUpsampler")
         self.assertEqual(result, [nid, 1])
 
-    @unittest.expectedFailure
     def test_regression_missing_api_model_does_not_hide_later_compatible_node(self):
-        """PR defect: a missing API model breaks out of the dedicated-node loop."""
+        """A missing API model does not hide a later compatible dedicated node."""
         result, graph, _ = self.upsample({
             "Flux3UpsamplePromptWithTextEncodeAPI": schema(("prompt", "api")),
             "Flux3PromptUpsampler": schema(("prompt",)),
@@ -418,11 +415,12 @@ class Flux3WorkflowTests(Flux3TestCase):
         self.assertEqual((info["steps"], info["cfg"]), (8, 1.0))
         self.one(graph, "ConditioningZeroOut")
 
-    def test_auto_turbo_is_used_when_available_and_off_disables_it(self):
+    def test_auto_and_off_skip_turbo_even_when_available(self):
         self.add_model("loras", "flux3_turbo.safetensors")
         graph, info = self.build(turbo="auto")
-        self.one(graph, "LoraLoader")
-        self.assertEqual((info["steps"], info["cfg"]), (8, 1.0))
+        self.assertEqual(self.nodes_of(graph, "LoraLoader"), [])
+        self.assertEqual((info["steps"], info["cfg"]), (25, 3.5))
+        self.assertFalse(any("Turbo-LoRA" in warning for warning in info["warnings"]))
         graph, info = self.build(turbo="off")
         self.assertEqual(self.nodes_of(graph, "LoraLoader"), [])
         self.assertEqual((info["steps"], info["cfg"]), (25, 3.5))
@@ -431,7 +429,7 @@ class Flux3WorkflowTests(Flux3TestCase):
         graph, info = self.build(turbo="auto")
         self.assertEqual(self.nodes_of(graph, "LoraLoader"), [])
         self.assertEqual((info["steps"], info["cfg"]), (25, 3.5))
-        self.assertTrue(any("Turbo-LoRA" in warning for warning in info["warnings"]))
+        self.assertFalse(any("Turbo-LoRA" in warning for warning in info["warnings"]))
         with self.assertRaises(ModelMissing):
             self.build(turbo="turbo")
 
