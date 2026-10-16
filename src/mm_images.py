@@ -920,8 +920,15 @@ def explain_http_error(e: urllib.error.HTTPError) -> str:
         return f"HTTP {e.code}"
     if not isinstance(body, dict):     # manche Server antworten nur mit einem String
         return f"ComfyUI lehnt den Workflow ab: HTTP {e.code}: {body}"
-    err = body.get("error") if isinstance(body.get("error"), dict) else {}
-    lines = [f"ComfyUI lehnt den Workflow ab: {err.get('message', e.code)}"]
+    raw_err = body.get("error")
+    if isinstance(raw_err, str) and raw_err.strip():
+        reason = raw_err                       # manche Server liefern den Grund als String
+    elif isinstance(raw_err, dict):
+        reason = raw_err.get("message", e.code)
+    else:
+        reason = e.code
+    err = raw_err if isinstance(raw_err, dict) else {}
+    lines = [f"ComfyUI lehnt den Workflow ab: {reason}"]
     if err.get("details"):
         lines.append(f"  {err['details']}")
     for nid, ne in (body.get("node_errors") or {}).items():
