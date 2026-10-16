@@ -189,20 +189,11 @@ class UpsamplerEmptyPromptTest(unittest.TestCase):
                 self.assertEqual(req.full_url, "http://fake:1/object_info")
                 return FakeResp(json.dumps(object_info).encode())
 
-            # Catalog holt /object_info direkt per urlopen (umgeht server_alive) -
-            # hier zwangsweise auf den Offline-Pfad stellen, damit der Fake-Server
-            # nicht als echte ComfyUI mit fehlenden Custom-Nodes interpretiert wird.
-            real_init = C.Catalog.__init__
-
-            def offline_init(self, roots, url=None, prefer_live=True):
-                real_init(self, roots, url=url, prefer_live=False)
-
             argv = ["mm.py", "image", "flux3", "--run",
-                    "-f", str(tdp / "empty.txt"), "-n", ""]
+                    "--prompt", "ein test-prompt", "-n", ""]
             with mock.patch.object(sys, "argv", argv), \
                  mock.patch.object(C, "load_config", return_value=cfg), \
                  mock.patch.object(C, "server_alive", return_value=True), \
-                 mock.patch.object(C.Catalog, "__init__", offline_init), \
                  mock.patch.object(urllib.request, "urlopen", side_effect=fake_urlopen), \
                  redirect_stdout(io.StringIO()) as out, \
                  redirect_stderr(io.StringIO()) as err:
