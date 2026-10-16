@@ -14,7 +14,7 @@ import tempfile
 import unittest
 import urllib.error
 import urllib.request
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 from unittest import mock
 
@@ -164,7 +164,7 @@ class UpsamplerEmptyPromptTest(unittest.TestCase):
         self.assertEqual(problems, [], f"Validierungsprobleme: {problems}")
 
     def test_cmd_image_run_reports_invalid_prompt_instead_of_crashing(self):
-        """End-to-end wie im Fehlerfall: Server antwortet 400 'invalid prompt' -> Exit 4, keine Traceback."""
+        """Server antwortet 400 'invalid prompt' -> Exit 1, Meldung auf stderr, kein Traceback."""
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
             cfg = {
@@ -178,18 +178,16 @@ class UpsamplerEmptyPromptTest(unittest.TestCase):
             (tdp / "empty.txt").write_text("", encoding="utf-8")
             (tdp / "neg.txt").write_text("low quality, blurry, watermark", encoding="utf-8")
             calls = []
+            object_info = live_cat(self.root).object_info
 
             def fake_urlopen(req, timeout=None):
                 calls.append(req)
                 if isinstance(req.data, bytes):     # POST /prompt -> exakt der reale Fehlerfall
-                    payload = json.loads(req.data.decode())
-                    errs = I.validate(payload["prompt"], fake_object_info())
-                    if errs:
-                        body = json.dumps({"error": "invalid prompt", "node_errors": {}}).encode()
-                        raise urllib.error.HTTPError("http://fake/prompt", 400, "Bad Request",
-                                                     {}, io.BytesIO(body))
-                    return FakeResp(json.dumps({"prompt_id": "abc"}).encode())
-                return FakeResp(json.dumps({}).encode())   # GET history
+                    body = json.dumps({"error": "invalid prompt", "node_errors": {}}).encode()
+                    raise urllib.error.HTTPError("http://fake:1/prompt", 400, "Bad Request",
+                                                 {}, io.BytesIO(body))
+                self.assertEqual(req.full_url, "http://fake:1/object_info")
+                return FakeResp(json.dumps(object_info).encode())
 
             # Catalog holt /object_info direkt per urlopen (umgeht server_alive) -
             # hier zwangsweise auf den Offline-Pfad stellen, damit der Fake-Server
@@ -206,17 +204,22 @@ class UpsamplerEmptyPromptTest(unittest.TestCase):
                  mock.patch.object(C, "server_alive", return_value=True), \
                  mock.patch.object(C.Catalog, "__init__", offline_init), \
                  mock.patch.object(urllib.request, "urlopen", side_effect=fake_urlopen), \
-                 redirect_stdout(io.StringIO()) as out:
+                 redirect_stdout(io.StringIO()) as out, \
+                 redirect_stderr(io.StringIO()) as err:
                 code = MM.main()
         text = out.getvalue()
-        self.assertEqual(code, 4, f"erwarteter Rueckgabewert 4, Text:\n{text}")
-        self.assertIn("[!]", text)
-        self.assertNotIn("Traceback", text)
+        self.assertEqual(code, 1, f"erwarteter Rueckgabewert 1, Text:\n{text}\n{err.getvalue()}")
+        self.assertEqual(err.getvalue(), "[!] ComfyUI lehnt den Workflow ab: invalid prompt\n")
+        self.assertNotIn("Traceback", text + err.getvalue())
         # Der gesendete Graph duerfte keinen unvollstaendigen ChatGPT-Knoten enthalten
-        sent = json.loads(next(r.data for r in calls if isinstance(r.data, bytes)).decode())["prompt"]
-        for node in sent.values():
-            if node["class_type"] == "ChatGPT":
-                self.assertTrue(str(node["inputs"].get("user_prompt", "")).strip())
+        posts = [r for r in calls if isinstance(r.data, bytes)]
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0].full_url, "http://fake:1/prompt")
+        sent = json.loads(posts[0].data.decode())["prompt"]
+        self.assertEqual(I.validate(sent, object_info), [])
+        chatgpt = [node for node in sent.values() if node["class_type"] == "ChatGPT"]
+        self.assertEqual(len(chatgpt), 1)
+        self.assertEqual(chatgpt[0]["inputs"]["user_prompt"], "ein test-prompt")
 
 
 class GuidanceEmbedderTest(unittest.TestCase):
