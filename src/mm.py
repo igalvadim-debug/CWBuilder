@@ -136,6 +136,18 @@ def cmd_video(a) -> int:
 # ───────────────────────────── image ─────────────────────────────
 
 def cmd_image(a) -> int:
+    """Build and save an image workflow from parsed CLI arguments.
+
+    Stage reference/control images and print a report. With ``a.run``, submit
+    the workflow to ComfyUI and download its images; ``a.start`` permits starting
+    the server. Save the workflow even if validation prevents submission.
+
+    Return 0 on success, 2 for an unknown mode, 3 for an unavailable execution
+    server, 4 for validation errors without ``a.force``, or 5 for no returned
+    images. Propagate SystemExit from prompt resolution, ModelMissing and
+    Unsupported from workflow building, OSError from file/network operations,
+    and RuntimeError from rejected, failed, or timed-out server execution.
+    """
     import mm_images as I
 
     cfg = C.load_config()
@@ -278,6 +290,11 @@ def cmd_check(a) -> int:
 # ───────────────────────────── Parser ─────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
+    """Return the CLI parser with subcommand handlers stored in ``fn``.
+
+    This does not parse arguments or run a command; legacy invocation handling
+    and the default video command are applied by ``main``.
+    """
     ap = argparse.ArgumentParser(prog="mm", description=__doc__, epilog=EPILOG,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd")

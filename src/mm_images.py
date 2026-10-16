@@ -593,7 +593,11 @@ def flux3_upsampler_cands(p: Params) -> list:
 
 
 def flux3_clip_type(cat: Catalog) -> str | None:
-    """Erlaubte CLIPLoader-'type'-Werte der laufenden ComfyUI (z.B. 'flux', 'flux2')."""
+    """Return a supported CLIPLoader type, preserving its advertised spelling.
+
+    Match case-insensitively in order: flux3, flux 3, flux2, flux. Return None
+    if node metadata or matching options are unavailable.
+    """
     if not cat.object_info:
         return None
     opts = combo_options(cat.object_info.get("CLIPLoader", {}).get("input", {}).get("required", {}).get("type"))
@@ -607,7 +611,11 @@ def flux3_clip_type(cat: Catalog) -> str | None:
 
 
 def node_inputs(spec: dict, wanted: dict) -> dict | None:
-    """Nur die Eingaben, die die Node wirklich verlangt (Pflicht-Eingaben vollstaendig?)."""
+    """Filter wanted inputs to names declared required or optional by the node.
+
+    Return None if any required name is missing. Values are not validated;
+    a supplied None counts as present, and an empty result can be valid.
+    """
     inp = spec.get("input", {})
     req = set(inp.get("required", {}))
     opt = set(inp.get("optional", {}))
@@ -618,7 +626,15 @@ def node_inputs(spec: dict, wanted: dict) -> dict | None:
 
 
 def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -> list:
-    """Prompt-Upsampler (LLM) - liefert einen STRING-Ausgang. None, wenn nichts passt."""
+    """Add prompt-upsample nodes and return a ``[node_id, 0]`` output link.
+
+    Try dedicated nodes, loader/sampler pairs, then ChatGPT using the catalog's
+    node metadata and model candidates. Pass ``p.upsample_max_tokens`` to
+    supported token-limit inputs. This builds nodes without executing an LLM.
+    Return None if metadata or a suitable setup is unavailable. Update ``info``
+    with model selections, an offline warning, and seeds when considered;
+    these updates can occur even when no nodes are added.
+    """
     if not cat.object_info:
         warn(info, "ComfyUI laeuft nicht - Prompt-Upsampler kann nicht geprueft werden "
                    "(mit laufendem Server erneut pruefen: mm.py check).")
@@ -702,6 +718,19 @@ def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -
 
 
 def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
+    """Return a Flux 3 graph with decoding and image-saving nodes.
+
+    Apply selected LoRAs and condition on all reference images. Unless an
+    explicit size is requested, use the first reference's dimensions after
+    scaling to ``p.megapixels``. Attempt prompt upsampling unless disabled;
+    keep the original prompt with a warning if no suitable setup is found.
+    Update ``info`` with model, warning, seed, and sampling details.
+
+    Propagate ModelMissing for required models or explicitly requested LoRAs;
+    a missing automatic Turbo-LoRA instead produces a warning and is skipped.
+    Raise Unsupported if ``p.control`` is truthy. Building does not execute
+    the workflow or save images locally.
+    """
     g = Graph()
     kind, uname = pick_unet(cat, [p.unet] if p.unet else FLUX3_UNET_CANDS)
     note(info, "UNet", f"{uname} [{kind}]")
