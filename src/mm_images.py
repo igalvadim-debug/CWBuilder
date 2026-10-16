@@ -701,8 +701,26 @@ def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -
         un = cat.pick("llm", flux3_upsampler_cands(p), required=False)
         if un:
             base = un.replace("\\", "/").split("/")[-1].rsplit(".", 1)[0]
-            ins = node_inputs(spec, {"file_name": base, "model_name": base, "user_prompt": prompt,
-                                     "prompt": prompt, "system_prompt": "", "temperature": 0.7,
+            # 'api_endpoint' und 'seed' sind bei manchen ChatGPT-Node-Versionen Pflicht;
+            # node_inputs uebernimmt sie nur, wenn die Node sie wirklich verlangt.
+            allowed = {**spec.get("input", {}).get("required", {}), **spec.get("input", {}).get("optional", {})}
+            ep = (cat.url.rstrip("/") + "/prompt") if cat.url else "http://127.0.0.1:8181/prompt"
+            extra = {"api_endpoint": ep} if "api_endpoint" in allowed else {}
+            if "seed" in allowed:
+                extra["seed"] = seed_of(p, info)
+            # 'file_name' ist ein Combo: wenn die Node eine Liste erlaubt, nehmen wir
+            # den dort vorhandenen Kandidaten (sonst meldet validate() 'Wert nicht in Liste').
+            fn_val = base
+            fn_opts = combo_options(allowed.get("file_name")) if "file_name" in allowed else None
+            if fn_opts:
+                fn_val = next((n for n in fn_opts if n.rsplit(".", 1)[0].lower() == base.lower()), base)
+            # Leerer Prompt: bei ChatGPT-Node + negativem Prompt nimmt ComfyUI den
+            # Negativtext als Upsampler-Vorlage - sonst fuehrt der leere user_prompt
+            # zu 400 'invalid prompt' beim Queuen.
+            up_src = prompt if str(prompt).strip() else (p.negative or prompt)
+            ins = node_inputs(spec, {**extra,
+                                     "file_name": fn_val, "model_name": base, "user_prompt": up_src,
+                                     "prompt": up_src, "system_prompt": "", "temperature": 0.7,
                                      "top_p": 1.0, "max_tokens": p.upsample_max_tokens, "mode": "chat"})
             if ins and "STRING" in (spec.get("output") or []):
                 nid = g.add("ChatGPT", **ins)
@@ -900,8 +918,10 @@ def explain_http_error(e: urllib.error.HTTPError) -> str:
         body = json.loads(e.read().decode("utf-8", "replace"))
     except Exception:
         return f"HTTP {e.code}"
-    lines = [f"ComfyUI lehnt den Workflow ab: {body.get('error', {}).get('message', e.code)}"]
-    err = body.get("error", {})
+    if not isinstance(body, dict):     # manche Server antworten nur mit einem String
+        return f"ComfyUI lehnt den Workflow ab: HTTP {e.code}: {body}"
+    err = body.get("error") if isinstance(body.get("error"), dict) else {}
+    lines = [f"ComfyUI lehnt den Workflow ab: {err.get('message', e.code)}"]
     if err.get("details"):
         lines.append(f"  {err['details']}")
     for nid, ne in (body.get("node_errors") or {}).items():
