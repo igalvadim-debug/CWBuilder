@@ -131,8 +131,10 @@ class Flux3UpsamplerTest(unittest.TestCase):
         self.assertEqual(link[1], 1)  # STRING steht an Index 1, nicht 0
 
     def test_api_node_without_model_skips_to_next_candidate(self):
+        # Erster Kandidat: api ist optional - ohne Upsampler-Modell muss die Node
+        # uebersprungen und der naechste Kandidat gewaehlt werden.
         api_spec = {
-            "input": {"required": {"prompt": ["STRING"], "api": ["STRING"]}, "optional": {}},
+            "input": {"required": {"prompt": ["STRING"]}, "optional": {"api": ["STRING"]}},
             "output": ["STRING"],
         }
         plain_spec = {
@@ -144,15 +146,15 @@ class Flux3UpsamplerTest(unittest.TestCase):
         (empty_root / "diffusion_models").mkdir(parents=True, exist_ok=True)
         cat = Catalog([empty_root], url=None, prefer_live=False)
         cat.object_info = {
-            "TextEncodeAPI": api_spec,           # braucht 'api' -> muss uebersprungen werden
-            "Flux3PromptUpsampler": plain_spec,  # naechster Kandidat gewinnt
+            "Flux3UpsamplePromptWithTextEncodeAPI": api_spec,   # api fehlt -> Skip
+            "Flux3PromptUpsampler": plain_spec,                 # naechster Kandidat gewinnt
         }
         g = Graph()
         info = {"models": [], "warnings": [], "notes": []}
         link = flux3_upsample(g, base_params(), cat, info, "hallo")
         self.assertIsNotNone(link)
         cls = {nid: n["class_type"] for nid, n in g.nodes.items()}
-        self.assertNotIn("TextEncodeAPI", cls.values())
+        self.assertNotIn("Flux3UpsamplePromptWithTextEncodeAPI", cls.values())
         self.assertIn("Flux3PromptUpsampler", cls.values())
 
     def test_api_node_still_used_when_model_available(self):

@@ -39,9 +39,9 @@ class LlmDirsTest(unittest.TestCase):
     def test_discovery_returns_only_the_four_supported_dirs(self):
         directories = KIND_DIRS["llm"]
         # Catalog liefert Namen relativ zum jeweiligen Unterordner (wie ComfyUI)
-        expected = sorted(f"up_{d}.safetensors" for d in directories)
-        found = [n.lower() for n in self.cat.names("llm")]
-        self.assertEqual(sorted(found), [n.lower() for n in expected])
+        expected = sorted((f"up_{d}.safetensors".lower() for d in directories))
+        found = sorted(n.lower() for n in self.cat.names("llm"))
+        self.assertEqual(found, expected)
 
     def test_safetensors_under_models_is_not_discovered(self):
         names = [n.lower() for n in self.cat.names("llm")]
