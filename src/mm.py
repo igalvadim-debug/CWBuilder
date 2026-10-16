@@ -37,6 +37,7 @@ MODE_ALIASES = {
     "edit": "qwen-edit", "qwenedit": "qwen-edit", "qwen_edit": "qwen-edit",
     "qwen": "qwen21", "qwen2.1": "qwen21", "qwen-image": "qwen21", "qwen-2.1": "qwen21",
     "z-image": "zimage", "zit": "zimage", "z": "zimage",
+    "flux3": "flux3", "flux-3": "flux3", "flux3klein": "flux3", "flux3-base": "flux3", "f3": "flux3",
 }
 
 EPILOG = """\
@@ -47,6 +48,8 @@ Beispiele:
   mm.py image klein9b -i foto.png --run         FLUX.2 Klein 9B als Edit
   mm.py image qwen21 --turbo p8 --control --control-image pose.png --run
   mm.py image qwen-edit -i a.png -i b.png "Person aus Bild 2 in Szene 1" --run
+  mm.py image flux3 --run                       Flux 3 (Klein Base int8 + Gemma 4 + Prompt-Upsampler)
+  mm.py image flux3 --no-upsample --steps 28 --cfg 4.0 --run
 """
 
 
@@ -167,6 +170,7 @@ def cmd_image(a) -> int:
         steps=a.steps, cfg=a.cfg, seed=a.seed, sampler=a.sampler, scheduler=a.scheduler,
         batch=a.batch or img["batch"], loras=parse_loras(a.lora), turbo=a.turbo,
         variant=a.variant, unet=a.unet, clip=a.clip, vae=a.vae, images=staged,
+        upsampler=a.upsampler, no_upsample=a.no_upsample, upsample_max_tokens=a.upsample_tokens,
         control=a.control, control_image=ctrl, preprocess=a.preprocess,
         control_strength=a.control_strength, megapixels=a.megapixels, prefix=a.prefix,
     )
@@ -300,7 +304,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.set_defaults(fn=cmd_video)
 
     i = sub.add_parser("image", help="Bild-Workflow erzeugen / ausfuehren")
-    i.add_argument("mode", help="krea2 | klein9b | klein4b | qwen-edit | qwen21 | zimage")
+    i.add_argument("mode", help="krea2 | klein9b | klein4b | qwen-edit | qwen21 | zimage | flux3")
     i.add_argument("items", nargs="*", help="Prompt-Text oder .txt; .json = Ausgabedatei")
     i.add_argument("-p", "--prompt")
     i.add_argument("-f", "--prompt-file")
@@ -319,6 +323,9 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--unet")
     i.add_argument("--clip")
     i.add_argument("--vae")
+    i.add_argument("--upsampler", help="nur flux3: Prompt-Upsampler (Dateiname/Teilstueck)")
+    i.add_argument("--no-upsample", action="store_true", help="nur flux3: Upsampler-Loop aus")
+    i.add_argument("--upsample-tokens", type=int, default=512, help="nur flux3: max. Tokens des Upsamplers")
     i.add_argument("-i", "--image", action="append", help="Referenzbild (mehrfach)")
     i.add_argument("--control", nargs="?", const="auto", help="ControlNet: auto|union|tile|depth")
     i.add_argument("--control-image")

@@ -8,6 +8,7 @@ Modi:
     qwen-edit  Qwen Image Edit 2511      + Lightning-LoRA (4 Steps), bis zu 3 Bilder
     qwen21     Qwen Image 2.1            + Turbo-LoRAs + Fun-ControlNet-Union + Edit
     zimage     Z-Image Turbo (AIO)       + Fun-ControlNet (Union/Tile)
+    flux3      FLUX.3 (Klein Base int8)  + Gemma-4-Text-Encoder + Prompt-Upsampler (Qwen3.5)
 
 Die Graphen folgen den offiziellen ComfyUI-Templates (comfyui_workflow_templates).
 """
@@ -57,6 +58,9 @@ class Params:
     unet: str | None = None
     clip: str | None = None
     vae: str | None = None
+    upsampler: str | None = None                     # nur flux3: Prompt-Upsampler (LLM)
+    no_upsample: bool = False                        # nur flux3: Upsampler-Loop aus
+    upsample_max_tokens: int = 512                   # nur flux3
     images: list = field(default_factory=list)       # Referenzbilder (Namen, wie ComfyUI sie kennt)
     control: str | None = None                       # None | auto | union | tile | depth
     control_image: str | None = None
@@ -94,6 +98,9 @@ TURBO_PRESETS: dict[str, dict[str, tuple]] = {
     "klein9b": {},   # Klein ist bereits destilliert (4 Steps, CFG 1) - es gibt keine Turbo-LoRA
     "klein4b": {},
     "zimage": {},    # Z-Image *Turbo* ist selbst schon 8-Step
+    "flux3": {       # Flux 3 Base ist kein Turbo-Modell - optionale Destillate als --turbo <lora-name>
+        "turbo": ("flux3_turbo", 8, 1.0),
+    },
 }
 
 MODE_INFO = {
@@ -103,6 +110,7 @@ MODE_INFO = {
     "qwen-edit": ("Qwen Image Edit 2511",  {"edit": True,  "control": []}),
     "qwen21":    ("Qwen Image 2.1",        {"edit": True,  "control": ["union"]}),
     "zimage":    ("Z-Image Turbo",         {"edit": False, "control": ["union", "tile"]}),
+    "flux3":     ("FLUX.3 Klein Base int8", {"edit": True, "control": []}),
 }
 
 
@@ -570,6 +578,191 @@ def build_zimage(p: Params, cat: Catalog, info: dict) -> Graph:
     return g
 
 
+# ───────────────────────────── Modus: FLUX.3 (Klein Base int8) ─────────────────────────────
+
+FLUX3_UNET_CANDS = ["flux3_image_klein_base_int8_convrot", "flux3_image_klein_base", "flux3_klein_base", "flux3"]
+FLUX3_CLIP_CANDS = ["gemma4-12b-with-proj-ltx-2.5-nvfp4", "gemma4_e2b_it_bf16", "gemma-4-E2B-it-abliterated",
+                    "Gemma-4-12B-it-uncensored-hereti20DeepNeuralNerd20-LTX202.5-ComfyUI-int8convrot"]
+FLUX3_UPSAMPLER_CANDS = ["qwen3.5_9b_flux3_prompt_upsampler_w4a8", "flux3_prompt_upsampler",
+                         "Qwen3.5-9B-heretic-v2", "qwen3.5", "Qwen3.5-4B-heretic-v2"]
+
+
+def flux3_upsampler_cands(p: Params) -> list:
+    """--upsampler voranstellen, sonst die Standard-Kandidaten."""
+    return [p.upsampler] + FLUX3_UPSAMPLER_CANDS if p.upsampler else list(FLUX3_UPSAMPLER_CANDS)
+
+
+def flux3_clip_type(cat: Catalog) -> str | None:
+    """Erlaubte CLIPLoader-'type'-Werte der laufenden ComfyUI (z.B. 'flux', 'flux2')."""
+    if not cat.object_info:
+        return None
+    opts = combo_options(cat.object_info.get("CLIPLoader", {}).get("input", {}).get("required", {}).get("type"))
+    if not opts:
+        return None
+    low = {o_.lower(): o_ for o_ in opts}
+    for want in ("flux3", "flux 3", "flux2", "flux"):
+        if want in low:
+            return low[want]
+    return None
+
+
+def node_inputs(spec: dict, wanted: dict) -> dict | None:
+    """Nur die Eingaben, die die Node wirklich verlangt (Pflicht-Eingaben vollstaendig?)."""
+    inp = spec.get("input", {})
+    req = set(inp.get("required", {}))
+    opt = set(inp.get("optional", {}))
+    give = {k: v for k, v in wanted.items() if k in req or k in opt}
+    if not req.issubset(give):
+        return None
+    return give
+
+
+def flux3_upsample(g: Graph, p: Params, cat: Catalog, info: dict, prompt: str) -> list:
+    """Prompt-Upsampler (LLM) - liefert einen STRING-Ausgang. None, wenn nichts passt."""
+    if not cat.object_info:
+        warn(info, "ComfyUI laeuft nicht - Prompt-Upsampler kann nicht geprueft werden "
+                   "(mit laufendem Server erneut pruefen: mm.py check).")
+        return None
+    up_st = cat.pick("text_encoders", flux3_upsampler_cands(p), ext=".safetensors", required=False)
+    # 1) dedizierte Upsampler-/TextEncodeAPI-Nodes der Flux-3-Templates
+    for cls in ("Flux3UpsamplePromptWithTextEncodeAPI", "Flux3PromptUpsampler", "Flux3PromptUpsample",
+                "UpsamplePromptWithTextEncodeAPI", "TextEncodeAPI"):
+        spec = cat.object_info.get(cls)
+        if not spec:
+            continue
+        allowed = {**spec.get("input", {}).get("required", {}), **spec.get("input", {}).get("optional", {})}
+        wanted = {"prompt": prompt}
+        for tname in ("prompt", "user_prompt", "input_prompt", "text"):
+            if tname in allowed:
+                wanted = {tname: prompt}
+                break
+        for tname in ("model_name", "model", "llm", "ckpt_name", "unet_name"):
+            if tname in allowed and up_st:
+                wanted[tname] = up_st
+        if "api" in allowed:
+            if not up_st:
+                break
+            wanted["api"] = up_st
+            note(info, "Prompt-Upsampler (API)", up_st)
+        for tname in ("max_tokens", "max_new_tokens"):
+            if tname in allowed:
+                wanted[tname] = p.upsample_max_tokens
+        for tname, val in (("temperature", 0.7), ("top_p", 1.0), ("seed", seed_of(p, info))):
+            if tname in allowed:
+                wanted[tname] = val
+        ins = node_inputs(spec, wanted)
+        if ins is None:
+            continue
+        outs = spec.get("output", []) or []
+        if "STRING" not in outs:
+            continue
+        nid = g.add(cls, **ins)
+        note(info, "Prompt-Upsampler", f"{cls}" + (f" + '{up_st}'" if up_st else ""))
+        return o(nid, 0)
+
+    # 2) Loader+Sampler-Paare (LLM-Server-Nodes, gguf oder safetensors)
+    for lcls, scls in (("LLMSSRGLoader", "LLMSimpleTextGen"), ("LLMLoader", "LLMSampler")):
+        if not all(c in cat.object_info for c in (lcls, scls)):
+            continue
+        un = (cat.pick("llm", flux3_upsampler_cands(p), required=False) or
+              cat.pick("loras", flux3_upsampler_cands(p), required=False))
+        if not un:
+            break
+        lspec = cat.object_info[lcls]
+        lins = node_inputs(lspec, {"model_name": un, "ckpt_name": un, "name": un, "lora_name": un})
+        if lins is None:
+            break
+        sspec = cat.object_info[scls]
+        sins = node_inputs(sspec, {"llm": None, "model": None, "server": None, "prompt": prompt,
+                                   "user_prompt": prompt, "max_tokens": p.upsample_max_tokens,
+                                   "max_new_tokens": p.upsample_max_tokens, "temperature": 0.7, "top_p": 1.0})
+        if sins is None or "STRING" not in (sspec.get("output") or []):
+            break
+        for k in list(sins):
+            if sins[k] is None:
+                sins[k] = o(g.add(lcls, **lins))
+        nid = g.add(scls, **sins)
+        note(info, "Prompt-Upsampler", f"{lcls} + {scls} + '{un}'")
+        return o(nid, 0)
+
+    # 3) ChatGPT-Node (ComfyUI-GPT/ChatGPT-Package): Dateiname ohne Pfad/Endung
+    spec = cat.object_info.get("ChatGPT")
+    if spec:
+        un = cat.pick("llm", flux3_upsampler_cands(p), required=False)
+        if un:
+            base = un.replace("\\", "/").split("/")[-1].rsplit(".", 1)[0]
+            ins = node_inputs(spec, {"file_name": base, "model_name": base, "user_prompt": prompt,
+                                     "prompt": prompt, "system_prompt": "", "temperature": 0.7,
+                                     "top_p": 1.0, "max_tokens": p.upsample_max_tokens, "mode": "chat"})
+            if ins and "STRING" in (spec.get("output") or []):
+                nid = g.add("ChatGPT", **ins)
+                note(info, "Prompt-Upsampler", f"ChatGPT-Node + '{un}'")
+                return o(nid, 0)
+    return None
+
+
+def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
+    g = Graph()
+    kind, uname = pick_unet(cat, [p.unet] if p.unet else FLUX3_UNET_CANDS)
+    note(info, "UNet", f"{uname} [{kind}]")
+    model = load_unet(g, kind, uname)
+
+    tn = cat.pick("text_encoders", [p.clip] if p.clip else FLUX3_CLIP_CANDS, ext=".safetensors")
+    note(info, "Text-Encoder", tn)
+    clip_type = flux3_clip_type(cat)
+    if clip_type is None:
+        warn(info, "Laufende ComfyUI unbekannt - CLIPLoader type='flux' angenommen; pruefe 'mm.py check'.")
+        clip_type = "flux"
+    elif p.clip is None and not any(k in tn.lower() for k in ("gemma4", "gemma-4", "gemma_4")):
+        warn(info, f"Erwarteter Flux-3-Text-Encoder (Gemma 4) nicht gefunden - Ersatz '{tn}' (type '{clip_type}').")
+    clip = o(g.add("CLIPLoader", clip_name=tn, type=clip_type, device="default"))
+
+    vn = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae", "flux2-vae", "ae"])
+    note(info, "VAE", vn)
+    vae = o(g.add("VAELoader", vae_name=vn))
+
+    turbo = resolve_turbo(p, cat, info, uname)
+    loras = ([(turbo.lora, 1.0)] if turbo else []) + user_loras(cat, p, info)
+    model, clip = lora_full(g, model, clip, loras)
+    steps, cfg, smp, sch = sampling(p, turbo, 25, 3.5)
+
+    prompt_text = p.prompt
+    if not p.no_upsample:
+        up = flux3_upsample(g, p, cat, info, prompt_text)
+        if up is not None:
+            prompt_text = up
+        else:
+            warn(info, "Kein Prompt-Upsampler gefunden (erwartet: qwen3.5_9b_flux3_prompt_upsampler_w4a8) - "
+                       "Prompt wird unveraendert verwendet. Abstellen: --no-upsample")
+    pos = o(g.add("CLIPTextEncode", text=prompt_text, clip=clip))
+    neg = negative_cond(g, clip, pos, p, cfg)
+
+    first_ref = None
+    for name in p.images:
+        li = g.add("LoadImage", image=name)
+        sc = scale_total(g, o(li), p.megapixels)
+        lat = g.add("VAEEncode", pixels=o(sc), vae=vae)
+        pos = o(g.add("ReferenceLatent", conditioning=pos, latent=o(lat)))
+        neg = o(g.add("ReferenceLatent", conditioning=neg, latent=o(lat)))
+        if first_ref is None:
+            first_ref = o(sc)
+    W, H, derive = sizes(g, p, first_ref)
+
+    if p.control:
+        raise Unsupported("Flux 3: noch kein ControlNet - nutze klein9b (--control union) oder qwen21.")
+
+    latent = o(g.add("EmptyFlux2LatentImage", width=W, height=H, batch_size=p.batch))
+    sigmas = g.add("Flux2Scheduler", steps=steps, width=W, height=H)
+    noise = g.add("RandomNoise", noise_seed=seed_of(p, info))
+    sel = g.add("KSamplerSelect", sampler_name=smp)
+    guider = g.add("CFGGuider", model=model, positive=pos, negative=neg, cfg=cfg)
+    sca = g.add("SamplerCustomAdvanced", noise=o(noise), guider=o(guider), sampler=o(sel),
+                sigmas=o(sigmas), latent_image=latent)
+    info["steps"], info["cfg"], info["sampler"] = steps, cfg, f"{smp}/Flux2Scheduler"
+    finish(g, p, o(sca, 0), vae)
+    return g
+
+
 BUILDERS = {
     "krea2": build_krea2,
     "klein9b": build_klein,
@@ -577,6 +770,7 @@ BUILDERS = {
     "qwen-edit": build_qwen_edit,
     "qwen21": build_qwen21,
     "zimage": build_zimage,
+    "flux3": build_flux3,
 }
 
 
