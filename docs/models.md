@@ -43,6 +43,7 @@ C:\ai_diffusion\models\diffusion_models\qwen_image_2.1_int8_convrot.safetensors
 D:\ComfyUiVideo\models\diffusion_models\Qwen-Image-2.1-Turbo-INT8-ConvRot.safetensors
 C:\ai_diffusion\models\diffusion_models\seedvr2_7b_int8_convrot.safetensors
 C:\ai_diffusion\models\diffusion_models\wan_1.3B_exp_e14.safetensors
+C:\ai_diffusion\models\diffusion_models\flux3_image_klein_base_int8_convrot.safetensors
 C:\ai_diffusion\models\diffusion_models\idea\ideogram4_fp8_scaled.safetensors
 C:\ai_diffusion\models\diffusion_models\idea\ideogram4_unconditional_fp8_scaled.safetensors
 C:\ai_diffusion\models\diffusion_models\redgraftLTX25Fast2K\redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors
@@ -113,6 +114,7 @@ C:\ai_diffusion\models\sigclip_vision\sigclip_vision_patch14_384.safetensors
 C:\ai_diffusion\models\style_models\flux1-redux-dev.safetensors
 C:\ai_diffusion\models\text_encoders\gemma4-12b-with-proj-ltx-2.5-nvfp4.safetensors
 C:\ai_diffusion\models\text_encoders\gemma4_e2b_it_bf16.safetensors
+C:\ai_diffusion\models\text_encoders\qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors
 C:\ai_diffusion\models\text_encoders\qwen3vl_8b_turbo_nvfp4.safetensors
 C:\ai_diffusion\models\text_encoders\umt5_xxl_fp16.safetensors
 C:\ai_diffusion\models\transformers\diffusion_pytorch_model.safetensors
