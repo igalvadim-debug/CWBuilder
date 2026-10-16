@@ -157,6 +157,153 @@ class Flux3UpsamplerTest(unittest.TestCase):
         self.assertNotIn("Flux3UpsamplePromptWithTextEncodeAPI", cls.values())
         self.assertIn("Flux3PromptUpsampler", cls.values())
 
+    def test_missing_api_model_fallback_preserves_prompt_and_output_slot(self):
+        for api_section in ("required", "optional"):
+            with self.subTest(api_section=api_section):
+                api_spec = {
+                    "input": {"required": {"prompt": ["STRING"]}, "optional": {}},
+                    "output": ["STRING"],
+                }
+                api_spec["input"][api_section]["api"] = ["STRING"]
+                cat = Catalog([], url=None, prefer_live=False)
+                cat.object_info = {
+                    "Flux3UpsamplePromptWithTextEncodeAPI": api_spec,
+                    "Flux3PromptUpsampler": {
+                        "input": {"required": {"user_prompt": ["STRING"]}},
+                        "output": ["INT", "STRING"],
+                    },
+                }
+                g = Graph()
+                info = {"models": [], "warnings": [], "notes": []}
+                prompt = "  Ein Leuchtturm bei Nacht.\nСвет над морем.  "
+
+                link = flux3_upsample(g, base_params(seed=42), cat, info, prompt)
+
+                self.assertIsNotNone(link)
+                self.assertEqual(link[1], 1)
+                self.assertEqual(g.nodes, {link[0]: {
+                    "class_type": "Flux3PromptUpsampler",
+                    "inputs": {"user_prompt": prompt},
+                }})
+                self.assertEqual(info["models"], [("Prompt-Upsampler", "Flux3PromptUpsampler")])
+                self.assertEqual(info["warnings"], [])
+
+    def test_all_api_candidates_without_a_model_return_none_without_side_effects(self):
+        for api_section in ("required", "optional"):
+            with self.subTest(api_section=api_section):
+                spec = {
+                    "input": {"required": {"prompt": ["STRING"]}, "optional": {}},
+                    "output": ["STRING"],
+                }
+                spec["input"][api_section]["api"] = ["STRING"]
+                cat = Catalog([], url=None, prefer_live=False)
+                cat.object_info = {cls: spec for cls in (
+                    "Flux3UpsamplePromptWithTextEncodeAPI", "Flux3PromptUpsampler",
+                    "Flux3PromptUpsample", "UpsamplePromptWithTextEncodeAPI", "TextEncodeAPI",
+                )}
+                g = Graph()
+                info = {"models": [], "warnings": [], "notes": []}
+
+                self.assertIsNone(flux3_upsample(g, base_params(seed=42), cat, info, "hallo"))
+                self.assertEqual(g.nodes, {})
+                self.assertEqual(info, {"models": [], "warnings": [], "notes": []})
+
+    def test_optional_api_uses_available_model_before_plain_fallback(self):
+        model = "qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors"
+        # Umgekehrte Einfuegereihenfolge: die Kandidatenprioritaet entscheidet.
+        cat = self._cat_with_info({
+            "Flux3PromptUpsampler": {
+                "input": {"required": {"prompt": ["STRING"]}},
+                "output": ["STRING"],
+            },
+            "Flux3UpsamplePromptWithTextEncodeAPI": {
+                "input": {
+                    "required": {"prompt": ["STRING"]},
+                    "optional": {"api": ["STRING"], "max_new_tokens": ["INT"], "seed": ["INT"]},
+                },
+                "output": ["INT", "MODEL", "STRING"],
+            },
+        })
+        g = Graph()
+        info = {"models": [], "warnings": [], "notes": []}
+
+        link = flux3_upsample(g, base_params(seed=42, upsample_max_tokens=37), cat, info, "hallo")
+
+        self.assertIsNotNone(link)
+        self.assertEqual(link[1], 2)
+        self.assertEqual(g.nodes, {link[0]: {
+            "class_type": "Flux3UpsamplePromptWithTextEncodeAPI",
+            "inputs": {"prompt": "hallo", "api": model, "max_new_tokens": 37, "seed": 42},
+        }})
+        self.assertIn(("Prompt-Upsampler (API)", model), info["models"])
+        self.assertEqual(info["warnings"], [])
+
+    def test_wrong_model_format_or_directory_does_not_satisfy_optional_api(self):
+        cases = (
+            ("text_encoders", "qwen3.5_9b_flux3_prompt_upsampler_w4a8.gguf"),
+            ("LLM", "qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors"),
+            ("text_encoders", "gemma4-12b-with-proj-ltx-2.5-nvfp4.safetensors"),
+        )
+        for index, (sub, filename) in enumerate(cases):
+            with self.subTest(directory=sub, filename=filename):
+                root = Path(self._tmp.name) / f"api_model_case_{index}"
+                (root / sub).mkdir(parents=True)
+                (root / sub / filename).write_bytes(b"x")
+                cat = Catalog([root], url=None, prefer_live=False)
+                cat.object_info = {
+                    "Flux3UpsamplePromptWithTextEncodeAPI": {
+                        "input": {"required": {"prompt": ["STRING"]}, "optional": {"api": ["STRING"]}},
+                        "output": ["STRING"],
+                    },
+                    "Flux3PromptUpsampler": {
+                        "input": {"required": {"text": ["STRING"]}},
+                        "output": ["STRING"],
+                    },
+                }
+                g = Graph()
+                info = {"models": [], "warnings": [], "notes": []}
+
+                link = flux3_upsample(g, base_params(seed=42), cat, info, "hallo")
+
+                self.assertIsNotNone(link)
+                self.assertEqual(link[1], 0)
+                self.assertEqual(g.nodes, {link[0]: {
+                    "class_type": "Flux3PromptUpsampler", "inputs": {"text": "hallo"},
+                }})
+                self.assertEqual(info["models"], [("Prompt-Upsampler", "Flux3PromptUpsampler")])
+
+    def test_api_skip_continues_past_an_incompatible_plain_candidate(self):
+        incompatible_specs = (
+            {"input": {"required": {"prompt": ["STRING"], "connection": ["MODEL"]}},
+             "output": ["STRING"]},
+            {"input": {"required": {"prompt": ["STRING"]}}, "output": ["MODEL"]},
+        )
+        for spec in incompatible_specs:
+            with self.subTest(spec=spec):
+                cat = Catalog([], url=None, prefer_live=False)
+                cat.object_info = {
+                    "Flux3UpsamplePromptWithTextEncodeAPI": {
+                        "input": {"required": {"prompt": ["STRING"]}, "optional": {"api": ["STRING"]}},
+                        "output": ["STRING"],
+                    },
+                    "Flux3PromptUpsampler": spec,
+                    "Flux3PromptUpsample": {
+                        "input": {"required": {"input_prompt": ["STRING"]}},
+                        "output": ["STRING"],
+                    },
+                }
+                g = Graph()
+                info = {"models": [], "warnings": [], "notes": []}
+
+                link = flux3_upsample(g, base_params(seed=42), cat, info, "hallo")
+
+                self.assertIsNotNone(link)
+                self.assertEqual(link[1], 0)
+                self.assertEqual(g.nodes, {link[0]: {
+                    "class_type": "Flux3PromptUpsample", "inputs": {"input_prompt": "hallo"},
+                }})
+                self.assertEqual(info["models"], [("Prompt-Upsampler", "Flux3PromptUpsample")])
+
     def test_api_node_still_used_when_model_available(self):
         api_spec = {
             "input": {"required": {"prompt": ["STRING"], "api": ["COMBO"]}, "optional": {}},
