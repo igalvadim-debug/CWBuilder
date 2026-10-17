@@ -81,6 +81,7 @@ CHANGE_LISTS = {}  # name -> dict, lazy aus mm_templates
 
 
 def _changes(name: str) -> dict:
+    """Aenderungsliste fuer eine Vorlage laden und im Modul zwischenspeichern."""
     if not CHANGE_LISTS:
         import mm_templates as T
         CHANGE_LISTS["ltx25"] = T.LTX_CHANGES
@@ -91,6 +92,7 @@ def _changes(name: str) -> dict:
 # ───────────────────────────── Vorlage ─────────────────────────────
 
 def load_template(key: str) -> dict:
+    """Eingebettete Vorlage laden; Ladefehler als TemplateError melden."""
     import mm_templates as T
     try:
         return T.load(TEMPLATES[key]["file"])
@@ -99,10 +101,12 @@ def load_template(key: str) -> dict:
 
 
 def byid(wf: dict) -> dict:
+    """Knoten nach ihrer ID als String indizieren; Knotenobjekte bleiben geteilt."""
     return {str(n["id"]): n for n in wf["nodes"]}
 
 
 def set_widget(node: dict, idx: int, value) -> None:
+    """Widget in-place per Index setzen; Listen bei Bedarf mit None auffuellen."""
     wv = node.get("widgets_values")
     if isinstance(wv, list):
         while len(wv) <= idx:
@@ -133,6 +137,7 @@ def set_widget_named(node: dict, name: str, value) -> bool:
 
 
 def unlink(wf: dict, nid: str, input_name: str) -> None:
+    """Benannten Eingang samt Workflow-Link und Verweisen an Quellausgaengen trennen."""
     nodes = byid(wf)
     node = nodes.get(str(nid))
     if not node:
@@ -158,6 +163,7 @@ def unlink(wf: dict, nid: str, input_name: str) -> None:
 
 
 def _link_src(wf: dict, lid: int, only=False):
+    """Quellknoten-ID und Ausgangsslot eines Links liefern, sonst None."""
     for l in wf.get("links", []):
         if l[0] == lid:
             return (l[1], l[2]) if only else (l[1], l[2])
@@ -220,12 +226,14 @@ def apply_changes(wf: dict, key: str, disabled: list[str]) -> list[str]:
 
 
 def _slot_of(wf: dict, nid: str, default: int = 0) -> int:
+    """Den vorgegebenen Ausgangsslot unveraendert zurueckgeben."""
     return default
 
 
 # ───────────────────────────── Referenzbilder ─────────────────────────────
 
 def rand_name(path: Path, rng: random.Random | None = None) -> str:
+    """Referenznamen mit fuenf Zufallszeichen und Dateiendung (sonst .png) erzeugen."""
     rng = rng or random
     suffix = "".join(rng.choices(string.ascii_lowercase + string.digits, k=5))
     ext = path.suffix.lower() or ".png"
@@ -392,6 +400,7 @@ def build_graph(key: str, *, prompt: str, negative: str | None = None,
 
 
 def _set_mode_fixed(node: dict, mode_str: str) -> None:
+    """Zweites Listen-Widget durch den Seed-Modus ersetzen, sofern es Text enthaelt."""
     for i, inp in enumerate(node.get("inputs", [])):
         w = inp.get("widget")
         if w and w.get("name") in ("fixed", "control_after_generate"):
@@ -402,6 +411,7 @@ def _set_mode_fixed(node: dict, mode_str: str) -> None:
 
 
 def _sg_widget_node(sg: dict, widget_idx: int, out_name: str) -> dict:
+    """Erste passende Primitive per Ausgangsnamen finden, sonst TemplateError ausloesen."""
     for n in sg["nodes"]:
         if n.get("type") in ("PrimitiveStringMultiline", "PrimitiveFloat", "PrimitiveInt"):
             outs = [o.get("name") for o in n.get("outputs", [])]
@@ -411,10 +421,12 @@ def _sg_widget_node(sg: dict, widget_idx: int, out_name: str) -> dict:
 
 
 def _sg_node(sg: dict, type_name: str) -> dict | None:
+    """Ersten Subgraph-Knoten des gewuenschten Typs liefern, sonst None."""
     return next((n for n in sg["nodes"] if n.get("type") == type_name), None)
 
 
 def _drop_input_links(wf: dict, node: dict) -> None:
+    """Alle Eingangslinks eines Knotens in-place aus Workflow und Quellknoten entfernen."""
     nodes = byid(wf)
     for inp in node.get("inputs", []):
         lid = inp.get("link")
@@ -432,6 +444,7 @@ def _drop_input_links(wf: dict, node: dict) -> None:
 
 
 def _sg_output_slot(sg_def: dict, out_name: str) -> int:
+    """Index einer benannten Subgraph-Ausgabe liefern; bei fehlendem Namen 0 nutzen."""
     for i, o in enumerate(sg_def.get("outputs", [])):
         if o.get("name") == out_name:
             return i
@@ -446,6 +459,7 @@ def ui_to_api(wf: dict) -> dict:
     api: dict[str, dict] = {}
 
     def widget_value(node: dict, name: str):
+        """Benannten Widget-Wert aus Dict oder Liste lesen, sonst None liefern."""
         wv = node.get("widgets_values")
         if isinstance(wv, dict):
             return wv.get(name)
@@ -463,6 +477,7 @@ def ui_to_api(wf: dict) -> dict:
         return None
 
     def collect(n: dict, target: dict) -> None:
+        """Knoten samt Verbindungen und Widgets in den API-Zielgraph uebernehmen."""
         cls = n["type"]
         if cls in sub_defs:
             expand_subgraph(sub_defs[cls], n, target)
@@ -496,6 +511,7 @@ def ui_to_api(wf: dict) -> dict:
         target[str(n["id"])] = {"class_type": cls, "inputs": inputs}
 
     def _widget_names(n: dict) -> list[str]:
+        """Widget-Namen aus Wert-Dict oder Eingangsmetadaten ohne Videovorschau ermitteln."""
         wv = n.get("widgets_values")
         if isinstance(wv, dict):
             return [k for k in wv if k not in ("videopreview",)]
@@ -550,6 +566,7 @@ def ui_to_api(wf: dict) -> dict:
         prefix = f"sg{outer_node['id']}_"
 
         def local_collect(n: dict, t: dict) -> None:
+            """Inneren Knoten mit praefixierten IDs und aufgeloesten Ausseneingaengen einfuegen."""
             inputs = {}
             for inp in n.get("inputs", []):
                 lid = inp.get("link")
@@ -599,6 +616,7 @@ def ui_to_api(wf: dict) -> dict:
                     t["inputs"][tname] = val
 
     def nodes_by_outer_target(oid: int, out_slot: int) -> list[tuple[int, int, str]]:
+        """Abnehmer eines Ausgangsslots als (Ziel-ID, Zielslot, Eingangsname) auflisten."""
         res = []
         for l in wf.get("links", []):
             if l[1] == oid and l[2] == out_slot:
@@ -610,6 +628,7 @@ def ui_to_api(wf: dict) -> dict:
         return res
 
     def _outer_input_value(outer: dict, name: str):
+        """Verbindung oder Listen-Widget eines benannten Ausseneingangs lesen, sonst None."""
         for inp in outer.get("inputs", []):
             if inp.get("name") != name:
                 continue
@@ -643,6 +662,7 @@ def ui_to_api(wf: dict) -> dict:
 # ───────────────────────────── Senden / Warten ─────────────────────────────
 
 def submit(url: str, api: dict, timeout_s: int = 3600) -> str:
+    """API-Graph einreihen und bis zum Abschluss warten; Prompt-ID liefern oder Fehler ausloesen."""
     import urllib.error
     import uuid
     cid = uuid.uuid4().hex
@@ -680,6 +700,7 @@ def submit(url: str, api: dict, timeout_s: int = 3600) -> str:
 
 
 def fetch_outputs(url: str, pid: str, outdir: Path) -> list[Path]:
+    """Bilder und Videos eines Jobs herunterladen und lokale Dateipfade zurueckgeben."""
     import urllib.parse
     import urllib.request
     h = C.http_json(f"{url.rstrip('/')}/history/{pid}", timeout=30)

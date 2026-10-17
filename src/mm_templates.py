@@ -57,6 +57,7 @@ MM_CHANGES = {
 
 
 def _blob(name: str) -> bytes:
+    """Benannte eingebettete gzip/base64-Vorlage als dekomprimierte Bytes liefern."""
     from mm_embedded import DATA  # erzeugt von _dev/embed_templates.py
     return gzip.decompress(base64.b64decode(DATA[name]))
 
@@ -79,4 +80,5 @@ def ensure_files() -> dict:
 
 
 def load(name: str) -> dict:
+    """Benannte eingebettete JSON-Vorlage als neues Workflow-Dict laden."""
     return json.loads(_blob(name).decode("utf-8"))
