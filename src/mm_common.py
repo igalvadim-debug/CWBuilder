@@ -81,6 +81,40 @@ DEFAULT_CONFIG: dict = {
         "generate_references": False,
         "order_lock": True,
         "subgraphs": True,
+        # Szenen-Kette: laesst kein Scene aus (first_frame_mode last_frame_chain + order_lock)
+        "vl_llm": "",                 # VL-LLM (Vision+Text) zum Bild-Beschreiben/Prompt-Erweitern
+        "vl_llm_auto": True,          # VL-LLM automatisch suchen und einbinden
+        "vl_max_tokens": 512,         # maximale Antwortlaenge des VL-LLM
+        "negative_prompt": (
+            "low quality, blurry, distorted faces, extra limbs, watermark, text, flickering, "
+            "jitter, bad anatomy, oversaturated, noisy, artifacts"
+        ),
+    },
+    # LTX-Video 2.3 / 2.5 (ComfyUI-LTXVideo; laeuft in der Video-ComfyUI)
+    "ltx": {
+        "diffusion_model_23": "",     # leer = automatisch suchen (ltx-2.3*)
+        "diffusion_model_25": "",     # leer = automatisch suchen (ltx-2.5* / ltxv25*)
+        "turbo_lora_23": "",          # leer = automatisch (distill/turbo/lightx2v ... 2.3)
+        "turbo_lora_25": "",          # leer = automatisch (ltx25_turbo*, distill ... 2.5)
+        "text_encoder": "",           # GGUF/Safetensors; leer = Gemma-Automatik
+        "clip_vision": "",            # nur 2.3 (ImageOnlyReferenceEncode); leer = Automatik
+        "video_vae": "",              # leer = automatisch
+        "audio_vae": "",              # nur 2.5 mit Ton; leer = automatisch
+        "latents_upscaler": "",       # latent_upscale_models; leer = automatisch
+        "width": 768,
+        "height": 512,
+        "fps": 25,
+        "default_duration": 6,        # Sekunden pro Scene
+        "steps": 30,                  # ohne Turbo
+        "turbo_steps": 8,             # mit Turbo-LoRA
+        "cfg": 1.0,                   # LTXVGuideConditioner arbeitet mit guidance
+        "guidance": 1.03,
+        "refine": 0.3,                # Detail-LoRA-Denoise (0 = aus)
+        "seed": -1,
+        "output_filename": "ltx_final_video.mp4",
+        "vl_llm": "",                 # VL-LLM im Workflow (beschreibt den letzten Frame)
+        "vl_llm_auto": True,
+        "vl_max_tokens": 512,
         "negative_prompt": (
             "low quality, blurry, distorted faces, extra limbs, watermark, text, flickering, "
             "jitter, bad anatomy, oversaturated, noisy, artifacts"
