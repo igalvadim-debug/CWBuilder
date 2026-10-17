@@ -283,7 +283,8 @@ def build_workflow(mode: str, plan: list[dict], models: dict, *, cat: Catalog,
 
         pos = o(g.add("CLIPTextEncode", text=pos_text, clip=clip))
         neg = o(g.add("CLIPTextEncode", text=neg_txt, clip=clip))
-        pos, neg = o(g.add("LTXVConditioning", positive=pos, negative=neg, frame_rate=fps))
+        cond = g.add("LTXVConditioning", positive=pos, negative=neg, frame_rate=fps)
+        pos, neg = o(cond, 0), o(cond, 1)
 
         lat = g.add("LTXVEmptyLatentImage", width=width, height=height, length=frames, batch_size=1)
         latent = o(lat)
@@ -306,16 +307,17 @@ def build_workflow(mode: str, plan: list[dict], models: dict, *, cat: Catalog,
         if refine_lora:
             rmodel = o(g.add("LoraLoaderModelOnly", model=model, lora_name=refine_lora, strength_model=1.0))
             rguider = g.add("CFGGuider", model=rmodel, positive=pos, negative=neg, cfg=cfg)
-            rsig = g.add("BasicScheduler", model=rmodel, steps=4, scheduler="simple")
+            rsig = g.add("BasicScheduler", model=rmodel, steps=4, scheduler="simple",
+                         denoise=refine_denoise(info))
             rn = o(g.add("RandomNoise", noise_seed=base_seed + 1000 + idx))
             rsamp = g.add("SamplerCustomAdvanced", noise=rn, guider=o(rguider), sampler=sampler,
-                          sigmas=o(rsig), latent_image=seg_lat, denoise=refine_denoise(info))
+                          sigmas=o(rsig), latent_image=seg_lat)
             seg_lat = o(rsamp, 1)
             samp = rsamp
 
         dec = g.add("VAEDecode", samples=seg_lat, vae=vae)
         img_seq = o(dec)
-        last = g.add("ImageFromBatch", image=img_seq, batch_index=-1, width=1, height=1)
+        last = g.add("ImageFromBatch", image=img_seq, batch_index=frames - 1, length=1)
         g.add("SaveImage", images=o(last), filename_prefix=f"{output_stem}_scene_{idx:02d}_lastframe")
         prev_last_img = o(last)
         prev_samp = str(samp)

@@ -7,9 +7,8 @@ enthaelt dazu eine Vision-Language-Kette:
     LoadImage/letzter Frame  ->  VAELoader/GGUF-Loader  ->  Text-Encoder(VL)
     -> Chat/Bildbeschreibung-Node  ->  STRING  ->  CLIPTextEncode der naechsten Scene
 
-Die Node-Typen unterscheiden sich je nach installiertem Custom-Paket; es wird
-das beste passende Paar aus /object_info ausgewaehlt (live), sonst ein
-Standardpaar fuer ComfyUI-GGUF + ComfyMLLM/KJNodes angenommen.
+Die Node-Typen unterscheiden sich je nach installiertem Custom-Paket; ein
+kompatibles Paar wird anhand der Ein-/Ausgabetypen aus /object_info gewaehlt.
 """
 from __future__ import annotations
 
@@ -32,14 +31,15 @@ VL_CHAT_CANDIDATES = [
     ("Qwen2VisionLoader",       ("image",),            ("prompt",),                None),
 ]
 
-# Loader-Kandidaten fuer das VL-Modell selbst (GGUF zuerst, dann safetensors)
+# Loader-Kandidaten: (Node-Klasse, Modelleingabe, Catalog-Modellordner).
+# Die Kompatibilitaet bestimmt der Ausgabetyp, nicht die Dateiendung.
 VL_MODEL_LOADERS = [
-    ("UnetLoaderGGUF",     "unet_name",      "gguf"),
-    ("GGUFLoader",         "gguf_name",      "gguf"),
-    ("LLMLoader",          "model_name",     "gguf"),
-    ("LLMSSRGLoader",      "model_name",     "gguf"),
-    ("DownloadAndLoadMoondream2", "model",   None),
-    ("CheckpointLoaderSimple",     "ckpt_name", None),
+    ("UnetLoaderGGUF",     "unet_name",      "unet"),
+    ("GGUFLoader",         "gguf_name",      "llm"),
+    ("LLMLoader",          "model_name",     "llm"),
+    ("LLMSSRGLoader",      "model_name",     "llm"),
+    ("DownloadAndLoadMoondream2", "model",   "llm"),
+    ("CheckpointLoaderSimple", "ckpt_name", "checkpoints"),
 ]
 
 # Typische Dateiname-Muster fuer Vision-Language-Modelle (LLM-Ordner)
@@ -51,14 +51,24 @@ VL_MODEL_CANDS = [
 
 
 def find_vl_model(cat: Catalog, explicit: str | None) -> Optional[str]:
-    """VL-Modell (LLM-Ordner, sonst text_encoders) finden - explizit oder automatisch."""
+    """VL-Modell in den Auswahllisten/Ordnern kompatibler Loader finden."""
+    chat = _chat_spec(cat)
+    if chat and chat[3]:
+        loaders = list(_compatible_loaders(cat, chat[4]))
+        for _, _, kind, _, input_spec in loaders:
+            name = _loader_model(cat, kind, input_spec, explicit)
+            if name:
+                return name
+        if loaders:
+            return None
+    # Offline/ohne kompatiblen Loader nur entdecken; add_vl_branch warnt beim Bau.
     if explicit:
-        for kind in ("llm", "text_encoders", "unet"):
+        for kind in ("llm", "text_encoders", "unet", "checkpoints"):
             n = cat.pick(kind, [explicit], required=False)
             if n:
                 return n
         return None
-    for kind in ("llm", "text_encoders"):
+    for kind in ("llm", "text_encoders", "unet", "checkpoints"):
         for c in VL_MODEL_CANDS:
             n = cat.pick(kind, [c], required=False)
             if n:
@@ -81,10 +91,43 @@ def _chat_spec(cat: Catalog):
             mods = next((k for k in (modk or []) if k in allowed), None) if modk else None
             outs = spec.get("output") or []
             if img and pr and ("STRING" in outs or "TEXT" in outs):
-                return cls, img, pr, mods, outs.index("STRING") if "STRING" in outs else 0
+                model_type = allowed[mods][0] if mods else None
+                out_slot = outs.index("STRING") if "STRING" in outs else 0
+                return cls, img, pr, mods, model_type, out_slot
         return None
     # Server nicht erreichbar: gangigstes Schema annehmen (ComfyUI-GGUF + KJNodes)
-    return "LLMVisionSampler", "image", "prompt", "llm", 0
+    return "LLMVisionSampler", "image", "prompt", "llm", None, 0
+
+
+def _compatible_loaders(cat: Catalog, model_type):
+    if not isinstance(model_type, str):
+        return
+    for cls, model_input, kind in VL_MODEL_LOADERS:
+        spec = (cat.object_info or {}).get(cls, {})
+        outputs = spec.get("output") or []
+        inputs = {**spec.get("input", {}).get("required", {}),
+                  **spec.get("input", {}).get("optional", {})}
+        if model_type in outputs and model_input in inputs:
+            yield cls, model_input, kind, outputs.index(model_type), inputs[model_input]
+
+
+def _loader_model(cat: Catalog, kind: str, input_spec, explicit: str | None):
+    options = combo_options(input_spec)
+    candidates = [explicit] if explicit else VL_MODEL_CANDS
+    if options is None:
+        return cat.pick(kind, candidates, required=False)
+    # Live-Auswahllisten sind massgeblich, auch bei extra_model_paths auf dem Server.
+    for candidate in candidates:
+        c = candidate.lower()
+        for name in options:
+            base = name.lower().replace("\\", "/").split("/")[-1]
+            if c in (name.lower(), base, base.rsplit(".", 1)[0]):
+                return name
+    for candidate in candidates:
+        hits = [name for name in options if candidate.lower() in name.lower()]
+        if hits:
+            return min(hits, key=len)
+    return None
 
 
 def add_vl_branch(g, cat: Catalog, *, image_src: list, prompt_text: str,
@@ -103,7 +146,7 @@ def add_vl_branch(g, cat: Catalog, *, image_src: list, prompt_text: str,
             "Keine Vision-LLM-Node in der laufenden ComfyUI gefunden - "
             "Prompt-Erweiterung faellt aus (Installation: ComfyUI-GGUF / ComfyMLLM / KJNodes).")
         return None
-    cls, img_in, pr_in, mod_in, out_slot = pick
+    cls, img_in, pr_in, mod_in, model_type, out_slot = pick
     if not vl_model:
         info.setdefault("warnings", []).append(
             "Kein VL-LLM (qwen2.5-vl/llava/moondream ...) im LLM-/text_encoders-Ordner gefunden - "
@@ -111,18 +154,18 @@ def add_vl_branch(g, cat: Catalog, *, image_src: list, prompt_text: str,
         return None
     model_link = None
     if mod_in:
-        low = vl_model.lower()
-        loader = ("UnetLoaderGGUF", "unet_name") if low.endswith(".gguf") else ("LLMLoader", "model_name")
-        if cat.object_info is not None:
-            for lc, li, ext in VL_MODEL_LOADERS:
-                if lc in cat.object_info and (ext is None or low.endswith(ext)):
-                    loader = (lc, li)
-                    break
-        try:
-            model_link = load_unet(g, "unet", vl_model) if loader[0] == "UnetLoaderGGUF" \
-                else [g.add(loader[0], **{loader[1]: vl_model}), 0]
-        except Exception:
-            model_link = [g.add(loader[0], **{loader[1]: vl_model}), 0]
+        for lc, li, kind, slot, input_spec in _compatible_loaders(cat, model_type):
+            name = _loader_model(cat, kind, input_spec, vl_model)
+            if name:
+                nid = load_unet(g, kind, name)[0] if lc == "UnetLoaderGGUF" \
+                    else g.add(lc, **{li: name})
+                model_link = [nid, slot]
+                break
+        if model_link is None:
+            info.setdefault("warnings", []).append(
+                f"Kein kompatibler VL-Loader fuer {cls}.{mod_in} ({model_type}) "
+                f"und '{vl_model}' gefunden - Prompt-Erweiterung faellt aus.")
+            return None
     ins = {img_in: image_src, pr_in: prompt_text}
     if model_link is not None:
         ins[mod_in] = model_link

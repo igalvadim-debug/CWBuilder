@@ -51,11 +51,19 @@ def parse_length_spec(spec: str | None, *, default_scenes: int = 1,
         return [float(default_seconds)] * max(1, int(default_scenes))
 
     # Aufzaehrung mit '+' : 2x8+2  oder  6+6+6
-    parts = [p.strip() for p in re.split(r"[+,]", s) if p.strip()]
+    parts = [p.strip() for p in s.split("+") if p.strip()]
     durations: list[float] = []
     for part in parts:
+        # N:A,B -> N Szenen; fehlende Dauern wiederholen den letzten Wert.
+        m = re.fullmatch(r"(\d+)\s*:\s*(.+)", part)
+        if m:
+            count = int(m.group(1))
+            secs = [_num(tok) for tok in m.group(2).split(",")]
+            if count >= 1 and all(sec is not None and sec > 0 for sec in secs):
+                durations += (secs + [secs[-1]] * max(0, count - len(secs)))[:count]
+                continue
         # N mal M / NxM / N*M  -> N Szenen mit je M Sekunden
-        m = re.match(r"^(\w+)\s*(?:mal|x|\*)\s*(\w+)$", part, re.I)
+        m = re.match(r"^(\w+(?:[.,]\d+)?)\s*(?:mal|x|\*)\s*(\w+(?:[.,]\d+)?)$", part, re.I)
         if m:
             n, sec = _num(m.group(1)), _num(m.group(2))
             if n and sec and n >= 1 and sec > 0:
@@ -135,8 +143,10 @@ def split_scene_prompts(prompt: str, count: int) -> list[str]:
 
 
 def _fit(segs: list[str], count: int, fallback: str) -> list[str]:
-    """Erzeugt exakt ``count`` Prompts; zu wenige Segmente werden wiederholt."""
+    """Erzeugt exakt ``count`` Prompts; Ueberhang bleibt in der letzten Szene."""
     out = list(segs[:count])
+    if count > 0 and len(segs) > count:
+        out[-1] = "\n\n".join(segs[count - 1:])
     while len(out) < count:
         src = out[-1] if out else fallback
         out.append(src)
