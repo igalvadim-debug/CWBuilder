@@ -36,10 +36,12 @@ class Graph:
     """Minimaler API-Graph mit nummerierten Nodes."""
 
     def __init__(self):
+        """Leeren Graphen und Zaehler fuer fortlaufende Node-IDs anlegen."""
         self.nodes: dict[str, dict] = {}
         self._n = 0
 
     def add(self, cls: str, **inputs) -> str:
+        """Node mit Klasse und Eingaben anlegen und ihre ID zurueckgeben."""
         self._n += 1
         nid = str(self._n)
         self.nodes[nid] = {"class_type": cls, "inputs": inputs}
@@ -68,6 +70,7 @@ class Graph:
 
 
 def o(nid: str, slot: int = 0) -> list:
+    """ComfyUI-Ausgabelink als [Node-ID, Ausgabe-Slot] erzeugen."""
     return [nid, slot]
 
 
@@ -144,6 +147,7 @@ def pick_models(mode: str, cat: Catalog, lcfg: dict, info: dict) -> dict:
 
 
 def _pick_any(cat: Catalog, kind: str, cands, ext=None):
+    """(Modelltyp, Treffer) liefern; bei Suchfehlern ist der Treffer None."""
     try:
         n = cat.pick(kind, cands, ext=ext, required=False)
     except Exception:
@@ -152,6 +156,7 @@ def _pick_any(cat: Catalog, kind: str, cands, ext=None):
 
 
 def _explain(cat: Catalog, kind: str, cands) -> str:
+    """Suchfehler als Text liefern, ersatzweise Modelltyp und Kandidaten."""
     try:
         cat.pick(kind, cands)   # wirft miterklaerendem Fehler
     except ModelMissing as e:
@@ -205,6 +210,11 @@ def build_workflow(mode: str, plan: list[dict], models: dict, *, cat: Catalog,
                    turbo: tuple[str, float] | None, user_loras: list[tuple[str, float]],
                    audio: bool, vl_model: str | None, vl_max_tokens: int,
                    negative: str, output_name: str, info: dict) -> dict:
+    """API-Graph fuer einen nicht leeren LTX-Szenenplan zurueckgeben.
+
+    Szenen ueber ihren letzten Frame verketten und die Videos zusammenfuegen.
+    Verwendete Trigger und VL-Modellhinweise werden in ``info`` ergaenzt.
+    """
     g = Graph()
     base_seed = seed if seed >= 0 else random.randrange(2 ** 31)
     output_stem = (output_name or "ltx_video").rsplit(".", 1)[0]
@@ -326,6 +336,7 @@ def build_workflow(mode: str, plan: list[dict], models: dict, *, cat: Catalog,
 
 
 def refine_denoise(info: dict) -> float:
+    """Refine-Denoise als float lesen; ohne Eintrag gilt 0.3."""
     return float(info.get("refine", 0.3))
 
 
@@ -436,6 +447,7 @@ def run(cfg: dict, mode: str, *, text: str | None, file: str | None, out: str | 
 
 
 def list_loras(cfg: dict, mode: str) -> list[dict]:
+    """LTX-LoRA-Vorschlaege aus den lokalen Video-Modellpfaden liefern."""
     tgt = C.target(cfg, "video")
     cat = Catalog(tgt["model_roots"], prefer_live=False)
     return suggest_loras(mode, cat)

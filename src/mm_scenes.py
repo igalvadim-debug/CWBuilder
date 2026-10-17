@@ -25,6 +25,7 @@ _MULTIPLY_WORDS = ("mal", "x", "*", ".")
 
 
 def _num(tok: str) -> float | None:
+    """Zahl, deutsches Zahlwort oder Sekundenangabe lesen; sonst None liefern."""
     t = tok.strip().lower().replace(",", ".")
     if not t:
         return None
@@ -155,6 +156,7 @@ def scene_plan(prompt: str, durations: list[float]) -> list[dict]:
 
 
 def total_seconds(plan: list[dict]) -> float:
+    """Szenendauern summieren und auf drei Nachkommastellen runden."""
     return round(sum(s["duration"] for s in plan), 3)
 
 
