@@ -22,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mm_common as C  # noqa: E402
 
+LTX_MODES = {"ltx23": "LTX-Video 2.3", "ltx25": "LTX-Video 2.5"}
+
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8", errors="replace")
