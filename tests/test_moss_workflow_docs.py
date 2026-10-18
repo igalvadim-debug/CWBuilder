@@ -96,7 +96,10 @@ class MossWorkflowOfflineDocsTest(unittest.TestCase):
                     r"(?<!`)`([^`]+)`(?!`)", text
                 )]
                 self.assertIn(expected_root, paths)
-                self.assertIn(expected_lora, paths)
+                self.assertIn(
+                    PureWindowsPath("loras") / expected_lora if node_id == 60 else expected_lora,
+                    paths,
+                )
 
     def test_offline_guidance_stays_in_disconnected_documentation_nodes(self):
         """Require guidance nodes to remain Markdown notes without graph connections."""
