@@ -60,6 +60,20 @@ set "PYPATH=python"
 set "PYARGS="
 
 :run
+rem Проверка результата: без созданного venv запускать нечего.
+if not exist "venv\Scripts\python.exe" (
+    echo [fail] venv не создан ^(не найден Python 3.12+ ^)^. См. сообщения выше.
+    pause
+    exit /b 1
+)
+rem Метки :start/:stop существуют только в генерируемом start.bat; проверяем,
+rem что venv создался, иначе некорректный повтор (например, --download-models
+rem без прав на запись) уйдёт в понятную ошибку, а не в «goto start».
+if not exist "venv\Scripts\python.exe" (
+    echo [fail] venv не создан ^(--download-models требует сети/прав^). См. сообщения выше.
+    pause
+    exit /b 1
+)
 echo === Установка open-creator LOCAL (всё локально в этой папке) ===
 rem Кавычки только вокруг пути exe — чтобы пробелы в %LOCALAPPDATA% не ломали запуск,
 rem а опции py-лаунчера (%PYARGS%) оставались отдельными аргументами.

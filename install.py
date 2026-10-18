@@ -211,6 +211,24 @@ def check_comfy_models(reg: dict) -> list[str]:
     return missing
 
 
+def _download_all_missing(reg: dict) -> list[str]:
+    """Имена всех обязательных (не optional) моделей, не найденных локально.
+
+    Используется при `--download-models` без имён: докачиваем ровно то, чего
+    не хватает (по реестру docs/local_models.json), а не всё подряд."""
+    roots = reg.get("roots", [])
+    models_cfg = reg.get("models", {})
+    entries = list(models_cfg.get("llm", [])) + list(models_cfg.get("embeddings", []))
+    missing: list[str] = []
+    for entry in entries:
+        if entry.get("optional"):
+            continue
+        path, _mmproj = resolve_entry(entry, roots)
+        if path is None:
+            missing.append(entry["name"])
+    return missing
+
+
 def prepare_models(py: Path, copy_models: bool, download_names: list[str]) -> int:
     """Подключить локальные модели из реестра БЕЗ скачивания.
 
@@ -227,7 +245,12 @@ def prepare_models(py: Path, copy_models: bool, download_names: list[str]) -> in
 
 def wire_models(reg: dict, py: Path, copy_models: bool,
                 download_names: list[str]) -> int:
-    """Подключить модели из уже загруженного реестра (см. prepare_models)."""
+    """Подключить модели из уже загруженного реестра (см. prepare_models).
+
+    Возвращает 0 при успехе; 1 — если LLM/embedding не найдено либо если в
+    ./local-stack/models не удалось разместить нужные файлы (симлинки/копии)
+    и при этом исходники лежат в разных папках — общей директории нет.
+    """
     roots = reg.get("roots", [])
     models_cfg = reg.get("models", {})
     entries = list(models_cfg.get("llm", [])) + list(models_cfg.get("embeddings", []))
@@ -235,6 +258,7 @@ def wire_models(reg: dict, py: Path, copy_models: bool,
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     resolved: list[tuple[dict, Path]] = []
     missing_required: list[str] = []
+    symlink_failed = False
     for entry in entries:
         path, mmproj = resolve_entry(entry, roots)
         RESOLVED_PATHS[id(entry)] = path
@@ -249,21 +273,24 @@ def wire_models(reg: dict, py: Path, copy_models: bool,
         if copy_models and target != path and not target.exists():
             print(f"[copy ] {path} -> {target}")
             shutil.copy2(path, target)
-        elif not copy_models and not target.exists():
+        elif not copy_models and not target.is_file():
             try:
                 target.symlink_to(path)
                 print(f"[link ] {entry['name']} -> {path}")
-            except OSError:
-                pass  # Windows без прав на симлинки: работаем через LOCAL_STACK_MODELS
+            except OSError as e:
+                symlink_failed = True
+                print(f"[warn ] симлинк {target.name} не создан ({e});"
+                      " пригодится --copy-models, если папки разные")
         if mmproj is not None:
             t2 = MODELS_DIR / mmproj.name
             if copy_models and not t2.exists():
                 shutil.copy2(mmproj, t2)
-            elif not copy_models and not t2.exists():
+            elif not copy_models and not t2.is_file():
                 try:
                     t2.symlink_to(mmproj)
-                except OSError:
-                    pass
+                except OSError as e:
+                    symlink_failed = True
+                    print(f"[warn ] симлинк {t2.name} не создан ({e})")
         resolved.append((entry, path))
 
     # Докачка разрешена только явным --download-models (по умолчанию — нет).
@@ -290,6 +317,15 @@ def wire_models(reg: dict, py: Path, copy_models: bool,
         return 1
     if not embed_present:
         print("[fail] Не найдено ни одной embedding-модели — RAG не будет работать.")
+        return 1
+    # Если симлинки не создались и исходники лежат в разных папках, общей
+    # директории для LOCAL_STACK_MODELS гарантировать нельзя (см. main).
+    if symlink_failed and not copy_models and \
+            len({str(p.parent) for _e, p in resolved}) > 1:
+        print("[fail] ./local-stack/models не может содержать все модели:"
+              " симлинки не создаются, а GGUF лежат в разных папках.")
+        print("       Перезапустите с копированием весов в одну папку:"
+              " python install.py --copy-models")
         return 1
     print(f"[ok    ] Модели подключены локально без скачивания:"
           f" LLM={len(llm_present)}, embeddings={len(embed_present)}")
@@ -415,25 +451,8 @@ if /i "%~1"=="stop" goto :stop
 
 if not exist "venv\\Scripts\\python.exe" goto install
 if not exist "venv\\.install-complete" goto install
-goto start
 
-:install
-echo Установка не завершена — запускаю установку...
-if exist "venv\\Scripts\\python.exe" (
-    "venv\\Scripts\\python.exe" install.py
-) else (
-    where py >nul 2>&1
-    if errorlevel 1 (
-        echo [fail] Установка не удалась.
-        pause
-        exit /b 1
-    )
-)
-if errorlevel 1 (
-    echo [fail] Установка не удалась.
-    exit /b 1
-)
-
+:start
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 set OPENCREATOR_LOCAL=1
@@ -455,6 +474,49 @@ echo Готово. Закройте окно стека или выполнит�
 pause
 exit /b 0
 
+:install
+rem Установка не завершена — запускаем install.py доступным способом (без скачивания из сети).
+echo Установка не завершена — запускаю установку...
+if exist "venv\\Scripts\\python.exe" (
+    rem Уже созданный venv имеет приоритет — ставим зависимости в него.
+    "venv\\Scripts\\python.exe" install.py %*
+) else if exist "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" (
+    "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" install.py %*
+) else (
+    rem Python 3.12+ через py-лаунчер (проверяется наличие лаунчера и версии).
+    where py >nul 2>&1
+    if errorlevel 1 goto install_no_py
+    py -3.12 -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        py -3.12 install.py %*
+        goto install_done
+    )
+    py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
+    if errorlevel 1 goto install_bad_py
+    py -3 install.py %*
+    goto install_done
+)
+:install_done
+if errorlevel 1 (
+    echo [fail] Установка не удалась.
+    pause
+    exit /b 1
+)
+goto start
+
+:install_no_py
+echo [fail] Не найден Python 3.12+ (нет venv и py-лаунчера).
+echo        Установите Python 3.12+ ^(https://python.org^) либо запустите явно:
+echo        "C:\\путь\\к\\python.exe" install.py, затем повторите start.bat
+pause
+exit /b 1
+
+:install_bad_py
+echo [fail] py-лаунчер найден, но Python 3.12+ среди установленных версий нет.
+echo        Установите Python 3.12+ ^(https://python.org^) и повторите start.bat
+pause
+exit /b 1
+
 :stop
 echo Останавливаю только процессы, записанные этим лаунчером (.pids / .webui.pid) ...
 rem Стек: local-stack/start.py --stop шлёт сигнал только PID из local-stack\\.pids
@@ -474,15 +536,17 @@ endlocal
 
 
 def write_start_bat() -> None:
-    """Ensure ROOT/start.bat matches START_BAT encoded as UTF-8 with LF newlines.
+    """Ensure ROOT/start.bat matches START_BAT encoded as UTF-8 with CRLF newlines.
 
-    Leave a matching launcher untouched; otherwise create or overwrite it.
+    Windows batch files must use CRLF line endings (cmd.exe breaks on bare
+    LF), so every newline in START_BAT is converted before writing. Leave a
+    matching launcher untouched; otherwise create or overwrite it.
     Then touch INSTALL_COMPLETE inside the venv, creating its parent directory
     if needed. Filesystem errors propagate as OSError; an existing completion
     marker is not removed on failure.
     """
     bat = ROOT / "start.bat"
-    data = START_BAT.encode("utf-8")
+    data = START_BAT.replace("\n", "\r\n").encode("utf-8")
     if not bat.exists() or bat.read_bytes() != data:
         bat.write_bytes(data)
     INSTALL_COMPLETE.parent.mkdir(parents=True, exist_ok=True)
@@ -490,13 +554,14 @@ def write_start_bat() -> None:
     print(f"[ok    ] Создан {bat.name}: двойной клик или .\\start.bat")
 
 
-def parse_args(argv: list[str]) -> tuple[str, bool, list[str]]:
-    """Return (base_python, copy_models, download_names) from argv.
+def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
+    """Return (base_python, copy_models, download_names, download_all) from argv.
 
     --python takes the following value (first occurrence wins);
     --copy-models enables copying into ./local-stack/models;
     --download-models [names...] enables HF downloads for the listed files
-    (or everything missing when no names given). Positional values that do
+    (or everything missing when no names given — then download_all is True;
+    the explicit flag is never silently dropped). Positional values that do
     not start with '-' select the base interpreter.
     """
     base_python = DEFAULT_PYTHON
@@ -509,13 +574,42 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str]]:
             if a.startswith("-"):
                 break
             download_names.append(a)
+    # Флаг задан, но имён нет — качаем все недостающие обязательные модели.
+    download_all = dl_enabled and not download_names
     if "--python" in argv:
         i = argv.index("--python")
         if i + 1 < len(argv):
             base_python = argv[i + 1]
     elif argv and not argv[0].startswith("-"):
         base_python = argv[0]
-    return base_python, copy_models, download_names
+    return base_python, copy_models, download_names, download_all
+
+
+def models_home_for(resolved: list[tuple[dict, Path]], reg: dict) -> str | None:
+    """Папка для LOCAL_STACK_MODELS — только если в ней реально есть всё нужное.
+
+    Возвращает str(MODELS_DIR), лишь когда каждая разрешившаяся модель и её
+    mmproj физически лежат в ./local-stack/models (при --copy-models — после
+    копирования; иначе — когда симлинки создались либо файл уже был там).
+    Если общую папку гарантировать нельзя (например, Windows без прав на
+    симлинки и разные исходные папки), возвращаем None — вызывающий обязан
+    сообщить о проблеме и порекомендовать --copy-models."""
+    if not resolved:
+        return None
+    roots = reg.get("roots", [])
+    for entry, path in resolved:
+        target = MODELS_DIR / entry["name"]
+        if not target.is_file():
+            return None
+        if entry.get("mmproj_candidates"):
+            mmproj = None
+            for cand in entry["mmproj_candidates"]:
+                mmproj = find_local_file(cand, roots)
+                if mmproj:
+                    break
+            if mmproj is not None and not (MODELS_DIR / mmproj.name).is_file():
+                return None
+    return str(MODELS_DIR)
 
 
 def main(argv: list[str]) -> int:
@@ -528,7 +622,7 @@ def main(argv: list[str]) -> int:
     model-setup status if no usable LLM/embedding was found, otherwise finish
     with web dependencies (warn-only), start.bat and the completion marker.
     """
-    base_python, copy_models, download_names = parse_args(argv)
+    base_python, copy_models, download_names, download_all = parse_args(argv)
 
     print("=== open-creator LOCAL installer (всё в этой папке, модели — без скачивания) ===")
     py = ensure_venv(base_python)
@@ -536,16 +630,42 @@ def main(argv: list[str]) -> int:
     activate_and_install(py)
 
     reg = load_registry()
+    if download_all:
+        # --download-models без имён: докачиваем ровно все недостающие
+        # обязательные модели (реестр уже может быть частично найден локально).
+        download_names = _download_all_missing(reg)
+        if download_names:
+            print("[net  ] --download-models без имён: докачиваем недостающее: "
+                  + ", ".join(download_names))
+        else:
+            print("[i    ] --download-models без имён: все обязательные модели"
+                  " уже есть локально — докачка не требуется.")
     models_rc = wire_models(reg, py, copy_models, download_names)
     entries = list(reg.get("models", {}).get("llm", [])) + \
         list(reg.get("models", {}).get("embeddings", []))
     resolved = [(e, RESOLVED_PATHS[id(e)]) for e in entries
                 if RESOLVED_PATHS.get(id(e)) is not None]
     llm, embed = pick_defaults(resolved)
-    # режим по умолчанию: local-stack берёт GGUF прямо с диска (без копирования),
-    # поэтому LOCAL_STACK_MODELS указывает на папку, где файл реально лежит.
-    models_home = str(MODELS_DIR) if copy_models else \
-        (str(resolved[0][1].parent) if resolved else str(MODELS_DIR))
+    # LOCAL_STACK_MODELS указываем на ./local-stack/models ТОЛЬКО когда в ней
+    # гарантированно лежат все нужные файлы (скопированы при --copy-models или
+    # симлинки создались). Иначе — на реальную папку, где лежит единственный
+    # общий набор; если единой папки нет — прерываем установку с рекомендацией.
+    common_dir = models_home_for(resolved, reg)
+    if common_dir is not None:
+        models_home = common_dir
+    else:
+        homes = {str(p.parent) for _e, p in resolved}
+        if len(homes) == 1:
+            models_home = next(iter(homes))
+        else:
+            print("[fail] Не удалось собрать все модели в одной папке:"
+                  " симлинки в ./local-stack/models не создаются (нет прав)"
+                  " и исходные GGUF лежат в разных директориях:")
+            for h in sorted(homes):
+                print(f"       {h}")
+            print("       Запустите установку с копированием весов в одну папку:")
+            print("           python install.py --copy-models")
+            return 1
     write_env(llm, embed, models_home)
     if models_rc != 0:
         print("[fail] Установка не завершена: подходящих локальных моделей нет."

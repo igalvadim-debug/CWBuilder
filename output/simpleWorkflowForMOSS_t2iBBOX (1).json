@@ -2,7 +2,7 @@
   "id": "3f58edad-9759-4482-a0ac-4c85afdf5f3a",
   "revision": 0,
   "last_node_id": 65,
-  "last_link_id": 919,
+  "last_link_id": 920,
   "nodes": [
     {
       "id": 13,
@@ -462,7 +462,7 @@
           "label": "elements",
           "name": "elements",
           "type": "ARRAY",
-          "link": null
+          "link": 920
         },
         {
           "label": "prompt",
@@ -665,7 +665,9 @@
         {
           "name": "elements",
           "type": "ARRAY",
-          "links": null
+          "links": [
+            920
+          ]
         }
       ],
       "properties": {
@@ -988,6 +990,14 @@
       64,
       0,
       "IMAGE"
+    ],
+    [
+      920,
+      61,
+      2,
+      51,
+      0,
+      "ARRAY"
     ]
   ],
   "groups": [],
@@ -998,8 +1008,8 @@
         "version": 1,
         "state": {
           "lastGroupId": 1,
-          "lastNodeId": 60,
-          "lastLinkId": 919,
+          "lastNodeId": 61,
+          "lastLinkId": 922,
           "lastRerouteId": 0
         },
         "revision": 0,
@@ -1239,7 +1249,7 @@
                 "localized_name": "model",
                 "name": "model",
                 "type": "MODEL",
-                "link": 919
+                "link": 922
               }
             ],
             "outputs": [
@@ -1668,8 +1678,8 @@
             "widgets_values": [
               108,
               "randomize",
-              30,
-              5,
+              8,
+              1.0,
               "er_sde",
               "simple",
               1
@@ -1677,8 +1687,8 @@
             "widgets_values_named": {
               "seed": 108,
               "control_after_generate": "randomize",
-              "steps": 30,
-              "cfg": 5,
+              "steps": 8,
+              "cfg": 1.0,
               "sampler_name": "er_sde",
               "scheduler": "simple",
               "denoise": 1
@@ -1954,7 +1964,7 @@
                 "name": "MODEL",
                 "type": "MODEL",
                 "links": [
-                  919
+                  920
                 ]
               }
             ],
@@ -1976,6 +1986,59 @@
               "lora_name": "moss\\MOSS-Image-SFT-8-steps-dmd.safetensors",
               "strength_model": 1
             }
+          },
+          {
+            "id": 61,
+            "type": "LoraLoaderModelOnly",
+            "pos": [
+              75.03204029225822,
+              -489.61140622144796
+            ],
+            "size": [
+              270,
+              110
+            ],
+            "flags": {},
+            "order": 13,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 920
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "slot_index": 0,
+                "links": [
+                  922
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.3.75",
+              "Node name for S&R": "LoraLoaderModelOnly",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "MOSS\\MOSS-Image-SFT-8-steps-dmd.safetensors",
+              1.0
+            ],
+            "widgets_values_named": {
+              "lora_name": "MOSS\\MOSS-Image-SFT-8-steps-dmd.safetensors",
+              "strength_model": 1.0
+            },
+            "title": "Turbo LoRA MOSS-Image-SFT-8-steps-dmd (strength 1.0)"
           }
         ],
         "groups": [
@@ -2194,10 +2257,18 @@
             "type": "MODEL"
           },
           {
-            "id": 919,
-            "origin_id": 53,
+            "id": 922,
+            "origin_id": 61,
             "origin_slot": 0,
             "target_id": 2,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 920,
+            "origin_id": 53,
+            "origin_slot": 0,
+            "target_id": 61,
             "target_slot": 0,
             "type": "MODEL"
           }
@@ -2212,8 +2283,8 @@
         "version": 1,
         "state": {
           "lastGroupId": 1,
-          "lastNodeId": 60,
-          "lastLinkId": 919,
+          "lastNodeId": 61,
+          "lastLinkId": 922,
           "lastRerouteId": 0
         },
         "revision": 0,
@@ -2454,7 +2525,7 @@
                 "localized_name": "model",
                 "name": "model",
                 "type": "MODEL",
-                "link": 919
+                "link": 922
               }
             ],
             "outputs": [
@@ -2883,8 +2954,8 @@
             "widgets_values": [
               108,
               "randomize",
-              30,
-              5,
+              8,
+              1.0,
               "er_sde",
               "simple",
               1
@@ -2892,8 +2963,8 @@
             "widgets_values_named": {
               "seed": 108,
               "control_after_generate": "randomize",
-              "steps": 30,
-              "cfg": 5,
+              "steps": 8,
+              "cfg": 1.0,
               "sampler_name": "er_sde",
               "scheduler": "simple",
               "denoise": 1
@@ -3169,7 +3240,7 @@
                 "name": "MODEL",
                 "type": "MODEL",
                 "links": [
-                  919
+                  920
                 ]
               }
             ],
@@ -3191,6 +3262,59 @@
               "lora_name": "moss\\MOSS-Image-SFT-8-steps-dmd.safetensors",
               "strength_model": 1
             }
+          },
+          {
+            "id": 61,
+            "type": "LoraLoaderModelOnly",
+            "pos": [
+              75.03204029225822,
+              -489.61140622144796
+            ],
+            "size": [
+              270,
+              110
+            ],
+            "flags": {},
+            "order": 13,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 920
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "slot_index": 0,
+                "links": [
+                  922
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.3.75",
+              "Node name for S&R": "LoraLoaderModelOnly",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "MOSS\\MOSS-Image-SFT-8-steps-dmd.safetensors",
+              1.0
+            ],
+            "widgets_values_named": {
+              "lora_name": "MOSS\\MOSS-Image-SFT-8-steps-dmd.safetensors",
+              "strength_model": 1.0
+            },
+            "title": "Turbo LoRA MOSS-Image-SFT-8-steps-dmd (strength 1.0)"
           }
         ],
         "groups": [
@@ -3409,10 +3533,18 @@
             "type": "MODEL"
           },
           {
-            "id": 919,
-            "origin_id": 53,
+            "id": 922,
+            "origin_id": 61,
             "origin_slot": 0,
             "target_id": 2,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 920,
+            "origin_id": 53,
+            "origin_slot": 0,
+            "target_id": 61,
             "target_slot": 0,
             "type": "MODEL"
           }
