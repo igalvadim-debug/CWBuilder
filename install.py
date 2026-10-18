@@ -56,25 +56,37 @@ KNOWN_LOCAL_PYTHONS = [
 ]
 
 
-def default_python() -> str:
-    """Base interpreter for creating the venv (see KNOWN_LOCAL_PYTHONS above).
-
-    MM_PYTHON принимается только если это рабочий Python >= 3.12; более
-    старая версия не «съедает» дальнейший поиск (py-лаунчер и т.д.).
-    """
-    mm_python = os.environ.get("MM_PYTHON", "").strip('"').strip()
-    if mm_python and is_supported_python(mm_python):
-        return mm_python
+def known_local_python() -> str:
+    """Первый существующий известный локальный Python312 ('' если не найден)."""
     localappdata = os.environ.get("LOCALAPPDATA", "")
-    candidates = [Path(localappdata) / "Programs" / "Python" / "Python312" / "python.exe"] if localappdata else []
+    candidates = ([Path(localappdata) / "Programs" / "Python" / "Python312" / "python.exe"]
+                  if localappdata else [])
     candidates += [Path(p) for p in KNOWN_LOCAL_PYTHONS]
     for cand in candidates:
         if cand.is_file():
             return str(cand)
+    return ""
+
+
+def default_python() -> str:
+    """Base interpreter for creating the venv (see KNOWN_LOCAL_PYTHONS above).
+
+    Приоритет: MM_PYTHON (принимаем любой непустой существующий путь — его
+    версию проверит parse_args/ensure_venv) > известный локальный Python312 >
+    sys.executable (тот, которым запущен сам install.py).
+    """
+    mm_python = _clean_path(os.environ.get("MM_PYTHON", ""))
+    if mm_python and Path(mm_python).is_file():
+        return mm_python
+    local = known_local_python()
+    if local:
+        return local
     return sys.executable
 
 
-DEFAULT_PYTHON = None  # устаревшее имя; base_python вычисляется default_python() в parse_args()
+# Интерпретатор по умолчанию для тестов и документации: известный локальный
+# Python312, если он есть на этом диске, иначе текущий sys.executable.
+DEFAULT_PYTHON = known_local_python() or sys.executable
 
 
 def is_supported_python(exe: str) -> bool:
@@ -548,12 +560,10 @@ if not exist "venv\\Scripts\\python.exe" goto install
 if not exist "venv\\.install-complete" goto install
 
 :start
-rem Интерпретатор для запуска стека: venv\\Scripts\\python.exe (он же активируется
-rem ниже); MM_PYTHON — только если это рабочий Python 3.12+ (старый не используем).
+rem Интерпретатор для запуска стека: MM_PYTHON (например, ваш Python 3.12 вне
+rem PATH), затем venv\\Scripts\\python.exe (он же активируется ниже).
 set "PYEXE=venv\\Scripts\\python.exe"
-if defined MM_PYTHON if exist "%MM_PYTHON%" (
-    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1 && set "PYEXE=%MM_PYTHON%"
-)
+if defined MM_PYTHON if exist "%MM_PYTHON%" set "PYEXE=%MM_PYTHON%"
 
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
@@ -581,14 +591,9 @@ rem Установка не завершена — запускаем install.py
 echo Установка не завершена — запускаю установку...
 set "INSTALL_OK="
 if defined MM_PYTHON if exist "%MM_PYTHON%" (
-    rem MM_PYTHON принимаем только если это Python 3.12+; иначе идём дальше
-    rem по цепочке поиска (venv, известный локальный Python312, py-лаунчер).
-    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
-    if not errorlevel 1 (
-        "%MM_PYTHON%" install.py %*
-        set "INSTALL_OK=1"
-        goto install_after
-    )
+    "%MM_PYTHON%" install.py %*
+    set "INSTALL_OK=1"
+    goto install_after
 )
 if exist "venv\\Scripts\\python.exe" (
     rem Уже созданный venv имеет приоритет — ставим зависимости в него.
@@ -598,11 +603,6 @@ if exist "venv\\Scripts\\python.exe" (
 )
 if exist "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" (
     "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" install.py %*
-    set "INSTALL_OK=1"
-    goto install_after
-)
-if exist "C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" (
-    "C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" install.py %*
     set "INSTALL_OK=1"
     goto install_after
 )
@@ -684,23 +684,33 @@ def write_start_bat() -> None:
     print(f"[ok    ] Создан {bat.name}: двойной клик или .\\start.bat")
 
 
+def _clean_path(value: str) -> str:
+    """Снять обрамляющие кавычки и пробелы с пути из аргументов/окружения."""
+    return value.strip().strip('"').strip()
+
+
 def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
     """Return (base_python, copy_models, download_names, download_all) from argv.
 
-    --python takes the following value (first occurrence wins);
-    --copy-models enables copying into ./local-stack/models;
-    --download-models [names...] enables HF downloads for the listed files
+    Priority for the base interpreter: first '--python <exe>' occurrence >
+    first positional value not starting with '-' > MM_PYTHON > known local
+    Python312 > sys.executable. An explicitly supplied interpreter is taken
+    verbatim even if it does not exist yet (it may be created later); only the
+    environment-derived fallback (MM_PYTHON) must name an existing file.
+    '--copy-models' enables copying into ./local-stack/models;
+    '--download-models [names...]' enables HF downloads for the listed files
     (or everything missing when no names given — then download_all is True;
-    the explicit flag is never silently dropped). Positional values that do
-    not start with '-' select the base interpreter.
-    Environment fallbacks: MM_PYTHON (the variable used by start.bat to point
-    at a Python outside PATH) and PYTHONUTF8/PYTHONIOENCODING are exported to
-    all child processes so install.py and its subprocesses always run in UTF-8
-    on Windows.
+    the explicit flag is never silently dropped). Values after '--python' and
+    after '--download-models' are consumed as its option value / model names
+    and can never be mistaken for the positional interpreter. Quoted paths
+    (with surrounding spaces) are normalized. PYTHONUTF8/PYTHONIOENCODING are
+    exported to all child processes (setdefault — caller's values win) so
+    install.py and its subprocesses always run in UTF-8 on Windows. The argv
+    list itself is never mutated.
     """
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-    base_python = default_python()
+
     copy_models = "--copy-models" in argv
     download_names: list[str] = []
     dl_enabled = "--download-models" in argv
@@ -712,27 +722,60 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
             download_names.append(a)
     # Флаг задан, но имён нет — качаем все недостающие обязательные модели.
     download_all = dl_enabled and not download_names
-    explicit_base = False
+
+    # Позиционный интерпретатор — первое значение argv, не являющееся опцией
+    # или её аргументом (значение --python и имена после --download-models
+    # позиционными не считаются).
+    positional = ""
+    skip_next = False
+    dl_seen = False
+    for a in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if a == "--python":
+            skip_next = True
+            continue
+        if a == "--download-models":
+            dl_seen = True
+            continue
+        if a.startswith("-"):
+            continue
+        if dl_seen:
+            # значения после --download-models — это имена моделей
+            break
+        positional = a
+        break
+
+    mm_python = _clean_path(os.environ.get("MM_PYTHON", ""))
+    if mm_python and not Path(mm_python).is_file():
+        mm_python = ""
+
+    explicit_base = ""
     if "--python" in argv:
         i = argv.index("--python")
         if i + 1 < len(argv):
-            base_python = argv[i + 1]
-            explicit_base = True
-    elif argv and not argv[0].startswith("-"):
-        base_python = argv[0]
-        explicit_base = True
-    # Явно указанный интерпретатор (CLI/MM_PYTHON/sys.executable) может быть
-    # старше 3.12 — не блокируем установку: если venv ещё нет, отдаём поиск
-    # py-лаунчеру, который подберёт совместимую версию (ensure_venv всё
-    # равно проверяет версию перед созданием venv).
-    if not explicit_base and (VENV_DIR / "Scripts" / "python.exe").exists():
-        pass  # существующий venv имеет приоритет — ничего менять не нужно
-    elif not is_supported_python(base_python):
-        py_ver = find_py_with_supported_python()
-        if py_ver:
-            print(f"[i    ] Интерпретатор {base_python!r} ниже 3.12 — "
-                  f"venv создам через py -{py_ver}")
-            base_python = py_ver
+            explicit_base = _clean_path(argv[i + 1])
+    if not explicit_base and positional:
+        explicit_base = _clean_path(positional)
+
+    if explicit_base:
+        # Явный интерпретатор принимаем как есть — даже если файла пока нет
+        # (его мог создать предыдущий шаг); ensure_venv проверит существование
+        # и версию перед созданием venv.
+        base_python = explicit_base
+    elif mm_python:
+        base_python = mm_python
+    else:
+        base_python = default_python()
+        # Фолбэк из окружения может быть старше 3.12 — не блокируем установку:
+        # отдаём поиск py-лаунчеру, который подберёт совместимую версию.
+        if not is_supported_python(base_python):
+            py_ver = find_py_with_supported_python()
+            if py_ver:
+                print(f"[i    ] Интерпретатор {base_python!r} ниже 3.12 — "
+                      f"venv создам через py -{py_ver}")
+                base_python = py_ver
     return base_python, copy_models, download_names, download_all
 
 
