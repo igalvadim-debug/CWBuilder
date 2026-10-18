@@ -1,5 +1,5 @@
-# open-creator LOCAL — зависимости Python-окружения (ставятся в ./venv).
-# Единственное внешнее требование: gradio для веб-интерфейса src/mm_ui.py.
-# Остальной код (src/mm*.py, install.py) использует только стандартную библиотеку.
-# Модели НЕ скачиваются: они берутся с диска (см. docs/local_models.json).
+# CWBuilder - Python dependencies (installed into ./venv).
+# Only external requirement: gradio for the web UI src/mm_ui.py.
+# The rest of the code (src/mm*.py, install.py) uses only the standard library.
+# Models are NEVER downloaded here: they stay on disk (see docs/models.txt).
 gradio>=4,<7

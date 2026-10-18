@@ -5,6 +5,7 @@
     mm.py image  <modus> [prompt | datei.txt] [Optionen]          Bild-Workflow (+ --run)
     mm.py list                                                    Modi, Turbo-LoRAs, Server
     mm.py check                                                   alle Modi gegen vorhandene Modelle testen
+    mm.py ui                                                      Gradio-Oberflaeche (:7865) starten
 
 Ohne Unterbefehl (z.B. .txt auf die start.bat gezogen) wird 'video' angenommen.
 Alle Pfade stehen in config.json; der Ordner kann beliebig verschoben werden.
@@ -30,7 +31,7 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-COMMANDS = {"video", "image", "list", "check", "-h", "--help"}
+COMMANDS = {"video", "image", "list", "check", "ui", "-h", "--help"}
 
 MODE_ALIASES = {
     "krea": "krea2", "krea-2": "krea2",
@@ -358,6 +359,12 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--force", action="store_true", help="trotz Validierungsfehlern senden")
     i.set_defaults(fn=cmd_image)
 
+    def _cmd_ui(a) -> int:
+        import mm_ui
+        mm_ui.main()
+        return 0
+
+    sub.add_parser("ui", help="Gradio-Oberflaeche starten (http://127.0.0.1:7865)").set_defaults(fn=_cmd_ui)
     sub.add_parser("list", help="Modi, Turbo-LoRAs und Serverstatus").set_defaults(fn=cmd_list)
     sub.add_parser("check", help="alle Modi gegen vorhandene Modelle pruefen").set_defaults(fn=cmd_check)
     return ap

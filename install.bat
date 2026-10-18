@@ -1,33 +1,43 @@
 @echo off
-rem open-creator LOCAL — установка окружения (Windows).
-rem Эквивалент ручного запуска: python install.py
-rem   1) ищет CPython (py -3.12 -> py -3 -> python),
-rem   2) вызывает install.py: venv ./venv + requirements.txt + модели + pnpm install,
-rem   3) после установки предлагает запустить start.bat (стек + веб :19861).
+rem CWBuilder - Umgebungsinstallation (Windows).
+rem Aequivalent zum manuellen Start: python install.py
+rem   1) sucht CPython 3.12+ (MM_PYTHON -> venv -> bekannter Python312 -> py -3.12 -> python),
+rem   2) ruft install.py auf: venv .\venv + requirements.txt (Modelle werden NICHT geladen),
+rem   3) nach der Installation Angebot: Gradio-UI starten (ui.bat).
 setlocal
-chcp 65001 >nul
 cd /d "%~dp0"
-title open-creator LOCAL install
+title CWBuilder install
 
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
 set "PYARGS="
 
 if not exist "install.py" (
-    echo [fail] Не найден install.py в этой папке.
+    echo [fail] install.py wurde in diesem Ordner nicht gefunden.
     pause
     exit /b 1
 )
 
-rem Уже установленный venv имеет приоритет (идемпотентный повторный запуск).
+rem Ein vorhandenes venv hat Vorrang (Wiederholung der Installation ist sicher).
 if exist "venv\Scripts\python.exe" (
     set "PYPATH=venv\Scripts\python.exe"
     set "PYARGS="
     goto run
 )
 
-rem Известная локальная установка Python 3.12 (проверяется первой — поиск в PATH не нужен).
-rem Это ваш интерпретатор: install.py создаст из него venv командой
+rem Vom Benutzer angegebener Interpreter (MM_PYTHON): nur akzeptieren, wenn er
+rem existiert und Python 3.12+ ist; aeltere Versionen blockieren die Suche nicht.
+if defined MM_PYTHON if exist "%MM_PYTHON%" (
+    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info ^>= (3, 12) else 1)" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYPATH=%MM_PYTHON%"
+        set "PYARGS="
+        goto run
+    )
+)
+
+rem Bekannte lokale Python-3.12-Installation (zuerst geprueft, kein PATH noetig).
+rem Das ist der Interpreter des Benutzers; install.py erzeugt daraus das venv:
 rem   "C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe" -m venv venv
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
     set "PYPATH=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
@@ -40,7 +50,7 @@ if exist "C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe"
     goto run
 )
 
-rem Запасной вариант: быстрый поиск в PATH (py launcher -> python).
+rem Ersatz: kurzer Suchlauf im PATH (py launcher -> python).
 where py >nul 2>&1
 if errorlevel 1 goto try_python
 py -3.12 -c "import sys" >nul 2>&1
@@ -49,7 +59,7 @@ if not errorlevel 1 (
     set "PYARGS=-3.12"
     goto run
 )
-py -3 -c "import sys" >nul 2>&1
+py -3 -c "import sys; sys.exit(0 if sys.version_info ^>= (3, 12) else 1)" >nul 2>&1
 if not errorlevel 1 (
     set "PYPATH=py"
     set "PYARGS=-3"
@@ -59,44 +69,43 @@ if not errorlevel 1 (
 :try_python
 where python >nul 2>&1
 if errorlevel 1 goto no_python
-rem Проверка версии: install.py требует CPython >= 3.12 (см. MIN_PYTHON в install.py).
-rem При --version не-интерактивный вывод, код 0 только если версия подходит.
-python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
+rem Versionspruefung: install.py verlangt CPython 3.12+ (siehe MIN_PYTHON in install.py).
+python -c "import sys; sys.exit(0 if sys.version_info ^>= (3, 12) else 1)" >nul 2>&1
 if errorlevel 1 goto bad_python
 set "PYPATH=python"
 set "PYARGS="
 
 :run
-echo === Установка open-creator LOCAL (всё локально в этой папке) ===
-rem Кавычки только вокруг пути exe — чтобы пробелы в %LOCALAPPDATA% не ломали запуск,
-rem а опции py-лаунчера (%PYARGS%) оставались отдельными аргументами.
+echo === CWBuilder Installation (alles lokal in diesem Ordner) ===
+rem Anfuehrungszeichen nur um den exe-Pfad - Leerzeichen in %LOCALAPPDATA%
+rem stoeren nicht, die py-Optionen (%PYARGS%) bleiben eigene Argumente.
 "%PYPATH%" %PYARGS% install.py %*
 if errorlevel 1 (
     echo.
-    echo [fail] Установка не завершена. См. сообщения выше.
+    echo [fail] Installation nicht abgeschlossen. Siehe Meldungen oben.
     pause
     exit /b 1
 )
 
 echo.
-choice /c YN /m "Установка завершена. Запустить стек сейчас (start.bat)?"
+choice /c YN /m "Installation fertig. Gradio-UI jetzt starten (ui.bat)?"
 if errorlevel 2 goto end
-call start.bat
+call ui.bat
 
 :end
 endlocal
 exit /b 0
 
 :no_python
-echo [fail] Python не найден в PATH.
-echo        Установите Python 3.12+ ^(https://python.org^) и повторите,
-echo        либо запустите явно: "C:\путь\к\python.exe" install.py
+echo [fail] Python wurde im PATH nicht gefunden.
+echo        Installieren Sie Python 3.12+ ^(https://python.org^) und wiederholen Sie,
+echo        oder starten Sie es explizit: "C:\pfad\zu\python.exe" install.py
 pause
 exit /b 1
 
 :bad_python
-echo [fail] Найден python в PATH, но его версия ниже 3.12 — не поддерживается.
-echo        Установите Python 3.12+ ^(https://python.org^), либо укажите явно:
-echo        "C:\путь\к\python3.12.exe" install.py
+echo [fail] python im PATH gefunden, aber die Version ist aelter als 3.12 - nicht unterstuetzt.
+echo        Installieren Sie Python 3.12+ ^(https://python.org^), oder zeigen Sie es explizit:
+echo        "C:\pfad\zu\python3.12.exe" install.py
 pause
 exit /b 1

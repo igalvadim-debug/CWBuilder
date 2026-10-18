@@ -1,56 +1,45 @@
-"""open-creator LOCAL — установка окружения (Windows).
+"""CWBuilder — установка окружения (Windows).
 
-Создаёт локальное venv (./venv) из указанного CPython, «активирует» его
-(для установки и запуска используется интерпретатор напрямую — эквивалент
-activate без лишней оболочки), ставит requirements.txt ЛОКАЛЬНО.
+Создаёт локальное venv (./venv) из указанного CPython 3.12+ и ставит
+requirements.txt ЛОКАЛЬНО (pip, только PyPI). Маркер завершения:
+venv/.install-complete — его проверяет start.bat.
 
-МОДЕЛИ НЕ КАЧАЮТСЯ. Установщик читает реестр уже имеющихся на диске весов
-(docs/local_models.json, составлен по docs/models.txt / docs/models.md) и
-подключает их напрямую через env-переменную LOCAL_STACK_MODELS — в
-./local-stack/models не копируется и с Hugging Face не скачивается ничего.
-Отдельные ComfyUI-модели (workflow'и image/video) тоже проверяются только
-на месте — если файла нет, выводится подсказка, но сеть не трогается.
+МОДЕЛИ НЕ КАЧАЮТСЯ И НЕ КОПИРУЮТСЯ. Все веса лежат на своих дисках
+(полный список путей: docs/models.txt, реестр: docs/local_models.json);
+ComfyUI берёт их напрямую из model_roots в config.json. Установщик только
+проверяет наличие нужных файлов и, если чего-то нет, пишет — что искал.
 
 Флаги:
-    --copy-models    скопировать найденные GGUF в ./local-stack/models
-                     (по умолчанию — нет, используем модели прямо с диска);
-    --download-models [имя ...]  разрешить докачку недостающего с HF
-                     (по умолчанию закачка полностью ВЫКЛЮЧЕНА);
-    --python <exe>   базовый интерпретатор для venv.
-
-Веб-интерфейс (open-creator UI): http://127.0.0.1:19861/ — поднимается
-командой `pnpm web:dev` после того, как local-stack запущен (start.bat).
-Для локального режима daemon использует OPENCREATOR_LOCAL=1 (см. .env.example).
+    --python <exe>            базовый интерпретатор для venv;
+    --check-models            проверить ComfyUI-модели по docs/local_models.json;
+    --download-models [имена] разрешить докачку с HF (по умолчанию ВЫКЛЮЧЕН;
+                              без имён — докачать все недостающие обязательные
+                              модели реестра; требует pip install huggingface_hub).
 
 Использование:
     "C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" install.py
-Либо просто запустить start.bat — при отсутствии venv он сам вызовет install.py.
-Всё остаётся внутри этой папки репозитория: venv, кэш pip/node — local;
-модели лежат в ваших папках и не дублируются.
+Либо просто запустить start.bat / ui.bat — при отсутствии venv они сами
+вызовут install.py. Всё остаётся внутри этой папки репозитория.
 """
 from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
-import venv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 VENV_DIR = ROOT / "venv"
 REQUIREMENTS = ROOT / "requirements.txt"
-MODELS_DIR = ROOT / "local-stack" / "models"
 LOCAL_MODELS_JSON = ROOT / "docs" / "local_models.json"
 INSTALL_COMPLETE = VENV_DIR / ".install-complete"
-ENV_FILE = ROOT / ".env"
 
 # Интерпретатор по умолчанию (можно переопределить аргументом --python).
 # Если venv ещё нет, install.py сам создаёт его командой:
 #   "<этот python>" -m venv venv
-# Приоритет поиска: --python <exe> > MM_PYTHON > известный локальный Python312
-# > sys.executable (тот, которым запущен сам install.py).
+# Приоритет поиска: --python <exe> > MM_PYTHON >= 3.12 > известный локальный
+# Python312 > py-лаунчер (3.12+) > sys.executable.
 KNOWN_LOCAL_PYTHONS = [
     r"C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe",
 ]
@@ -72,9 +61,6 @@ def default_python() -> str:
         if cand.is_file():
             return str(cand)
     return sys.executable
-
-
-DEFAULT_PYTHON = None  # устаревшее имя; base_python вычисляется default_python() в parse_args()
 
 
 def is_supported_python(exe: str) -> bool:
@@ -130,9 +116,6 @@ def find_py_with_supported_python() -> str | None:
         if rc == 0:
             return v
     return None
-
-# Кэш найденных путей записей реестра: id(entry) -> Path | None (заполняет prepare_models).
-RESOLVED_PATHS: dict[int, Path | None] = {}
 
 
 def venv_python() -> Path:
@@ -217,7 +200,7 @@ def activate_and_install(py: Path) -> None:
     print("[ok    ] Зависимости установлены в venv (все локально, без внешних AI API)")
 
 
-# --- реестр локальных моделей (без скачивания) --------------------------------
+# --- проверка моделей (без скачивания и без копирования) ----------------------
 
 def load_registry() -> dict:
     """Прочитать docs/local_models.json; пустой словарь, если файла нет."""
@@ -267,7 +250,6 @@ def resolve_entry(entry: dict, default_roots: list[str]) -> tuple[Path | None, P
             break
     mmproj = None
     if path is not None and entry.get("mmproj_candidates"):
-        mmproj = None
         for cand in entry["mmproj_candidates"]:
             mmproj = find_local_file(cand, default_roots)
             if mmproj:
@@ -324,371 +306,89 @@ def _download_all_missing(reg: dict) -> list[str]:
     return missing
 
 
-def prepare_models(py: Path, copy_models: bool, download_names: list[str]) -> int:
-    """Подключить локальные модели из реестра БЕЗ скачивания.
+def download_models(py: Path, names: list[str]) -> int:
+    """Докачка с Hugging Face — ТОЛЬКО по явному --download-models.
 
-    Найденные GGUF-файлы остаются в своих папках; в ./local-stack/models
-    кладутся симлинки (POSIX) либо список копируется (--copy-models), а
-    local-stack указывает на них через LOCAL_STACK_MODELS в .env. Если часть
-    моделей не найдена — установка продолжается на тех, что есть; при полном
-    отсутствии LLM/embedding возвращается 1. Скачивание с HF выполняется
-    только если передан непустой download_names (--download-models).
+    Реестр docs/local_models.json НЕ содержит HF-репозиториев (правило:
+    ничего не придумывать), поэтому источник берётся из optional-поля
+    "download_repo" конкретной записи; если его нет — печатаем, что именно
+    искали, и просим указать repo вручную. Скачивание идёт в первый корень
+    реестра; huggingface_hub вызывается через python -m (без прямого импорта).
+    По умолчанию этот путь не выполняется вовсе (0 байт сети).
     """
     reg = load_registry()
-    return wire_models(reg, py, copy_models, download_names)
-
-
-def wire_models(reg: dict, py: Path, copy_models: bool,
-                download_names: list[str]) -> int:
-    """Подключить модели из уже загруженного реестра (см. prepare_models).
-
-    Возвращает 0 при успехе; 1 — если LLM/embedding не найдено либо если в
-    ./local-stack/models не удалось разместить нужные файлы (симлинки/копии)
-    и при этом исходники лежат в разных папках — общей директории нет.
-    """
     roots = reg.get("roots", [])
     models_cfg = reg.get("models", {})
     entries = list(models_cfg.get("llm", [])) + list(models_cfg.get("embeddings", []))
+    by_name = {e["name"]: e for e in entries}
+    dest_root = roots[0] if roots else None
+    if dest_root is None:
+        print("[fail] В docs/local_models.json нет ни одного корня (roots) —"
+              " скачивать некуда.")
+        return 1
+    rc_all = 0
+    for name in names:
+        entry = by_name.get(name)
+        if entry is None:
+            print(f"[warn] {name} — нет в реестре {LOCAL_MODELS_JSON}; пропуск")
+            continue
+        repo = entry.get("download_repo")
+        hf_path = entry.get("download_path", name)
+        if not repo:
+            print(f"[warn] {name} — в реестре нет поля \"download_repo\""
+                  " (HF-репозиторий); укажите его в docs/local_models.json"
+                  " или положите файл вручную. Пропуск.")
+            continue
+        dest = Path(str(dest_root).replace("\\", "/")) / hf_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        print(f"[net  ] {name} <- hf.co/{repo}:{hf_path} -> {dest}")
+        code = (
+            "import runpy,sys;"
+            "sys.argv=['hf',%r,'--local-dir',%r,%r];"
+            "runpy.run_module('huggingface_hub.commands.huggingface_cli',run_name='__main__')"
+            % (repo, str(Path(str(dest_root).replace("\\", "/"))), hf_path)
+        )
+        if run([str(py), "-c", code]) != 0:
+            print(f"[fail] Не удалось скачать {name}"
+                  " (проверьте: venv\\Scripts\\python.exe -m pip install huggingface_hub)")
+            rc_all = 1
+    return rc_all
 
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    resolved: list[tuple[dict, Path]] = []
-    missing_required: list[str] = []
-    symlink_failed = False
+
+def report_models(reg: dict) -> int:
+    """Отчёт о локальных моделях без каких-либо изменений на диске.
+
+    Проверяет LLM/embedding-записи реестра и ComfyUI-модели; печатает, что
+    найдено (и где), а что отсутствует. Всегда возвращает 0 — отсутствие
+    GGUF не мешает режимам image/video (они работают через ComfyUI)."""
+    roots = reg.get("roots", [])
+    models_cfg = reg.get("models", {})
+    entries = list(models_cfg.get("llm", [])) + list(models_cfg.get("embeddings", []))
+    found = 0
     for entry in entries:
         path, mmproj = resolve_entry(entry, roots)
-        RESOLVED_PATHS[id(entry)] = path
-        if path is None:
-            if entry.get("optional"):
-                print(f"[skip ] {entry['name']} — нет локально (опциональна, не качаем)")
-            else:
-                missing_required.append(entry["name"])
-                print(f"[--   ] {entry['name']} — не найдена среди локальных папок")
-            continue
-        target = MODELS_DIR / entry["name"]
-        if copy_models and target != path and not target.exists():
-            print(f"[copy ] {path} -> {target}")
-            shutil.copy2(path, target)
-        elif not copy_models and not target.is_file():
-            try:
-                target.symlink_to(path)
-                print(f"[link ] {entry['name']} -> {path}")
-            except OSError as e:
-                symlink_failed = True
-                print(f"[warn ] симлинк {target.name} не создан ({e});"
-                      " пригодится --copy-models, если папки разные")
-        if mmproj is not None:
-            t2 = MODELS_DIR / mmproj.name
-            if copy_models and not t2.exists():
-                shutil.copy2(mmproj, t2)
-            elif not copy_models and not t2.is_file():
-                try:
-                    t2.symlink_to(mmproj)
-                except OSError as e:
-                    symlink_failed = True
-                    print(f"[warn ] симлинк {t2.name} не создан ({e})")
-        resolved.append((entry, path))
-
-    # Докачка разрешена только явным --download-models (по умолчанию — нет).
-    if download_names:
-        setup = ROOT / "local-stack" / "setup_models.py"
-        if setup.exists():
-            print(f"[net  ] Разрешена докачка: {', '.join(download_names)}")
-            run([str(py), str(setup)] + [f"--only={','.join(download_names)}"])
+        if path is not None:
+            found += 1
+            extra = f" (+mmproj {mmproj.name})" if mmproj else ""
+            print(f"[model] {entry['name']}{extra} — есть: {path}")
+        elif entry.get("optional"):
+            print(f"[skip ] {entry['name']} — нет локально (опциональна, не качаем)")
         else:
-            print("[warn] local-stack/setup_models.py не найден — докачка пропущена")
-    elif missing_required:
-        print("[i    ] Скачивание с Hugging Face ОТКЛЮЧЕНО: используются только"
-              " модели, которые уже есть на диске (docs/local_models.json).")
-
+            print(f"[--   ] {entry['name']} — не найдена среди локальных папок"
+                  " (нужна только для RAG/кода, image/video не трогает)")
     comfy_missing = check_comfy_models(reg)
     if comfy_missing:
         print("[i    ] ComfyUI-модели не найдены (не качаем; положите сами или"
               " укажите путь в docs/local_models.json): " + ", ".join(comfy_missing))
-
-    llm_present = [e["name"] for e, _ in resolved if e.get("role")]
-    embed_present = [e["name"] for e, _ in resolved if "primary" in e]
-    if not llm_present:
-        print("[fail] Ни одной локальной LLM-модели не найдено — стек не стартует.")
-        return 1
-    if not embed_present:
-        print("[fail] Не найдено ни одной embedding-модели — RAG не будет работать.")
-        return 1
-    # Если симлинки не создались и исходники лежат в разных папках, общей
-    # директории для LOCAL_STACK_MODELS гарантировать нельзя (см. main).
-    if symlink_failed and not copy_models and \
-            len({str(p.parent) for _e, p in resolved}) > 1:
-        print("[fail] ./local-stack/models не может содержать все модели:"
-              " симлинки не создаются, а GGUF лежат в разных папках.")
-        print("       Перезапустите с копированием весов в одну папку:"
-              " python install.py --copy-models")
-        return 1
-    print(f"[ok    ] Модели подключены локально без скачивания:"
-          f" LLM={len(llm_present)}, embeddings={len(embed_present)}")
+    print(f"[ok    ] Модели: найдено {found} записей реестра; скачано 0 байт.")
     return 0
 
 
-def write_env(default_llm: str | None, embed_model: str | None,
-              models_home: str | None = None) -> None:
-    """Записать/обновить .env: LOCAL_STACK_MODELS и выбранные модели.
-
-    models_home — папка, в которой лежат GGUF-файлы (при --copy-models это
-    ./local-stack/models, иначе — исходная папка на диске). Existing keys
-    are replaced in place; unknown lines are preserved.
-    """
-    lines: list[str] = []
-    if ENV_FILE.exists():
-        lines = ENV_FILE.read_text(encoding="utf-8").splitlines()
-
-    updates = {"OPENCREATOR_LOCAL": "1"}
-    if models_home:
-        updates["LOCAL_STACK_MODELS"] = models_home
-    if default_llm:
-        updates["LOCAL_LLM_MODEL"] = default_llm
-    if embed_model:
-        updates["LOCAL_EMBED_MODEL"] = embed_model
-
-    seen: set[str] = set()
-    out: list[str] = []
-    for line in lines:
-        key = line.split("=", 1)[0].strip()
-        if key in updates:
-            out.append(f"{key}={updates[key]}")
-            seen.add(key)
-        else:
-            out.append(line)
-    for key, val in updates.items():
-        if key not in seen:
-            out.append(f"{key}={val}")
-    ENV_FILE.write_text("\n".join(out) + "\n", encoding="utf-8")
-    print(f"[ok    ] .env обновлён ({', '.join(sorted(updates))})")
-
-
-def pick_defaults(resolved_entries: list[tuple[dict, Path]]) -> tuple[str | None, str | None]:
-    """Вернуть (LOCAL_LLM_MODEL, LOCAL_EMBED_MODEL) по флагам реестра.
-
-    LLM: use_as_default_if_present > role=coding > role=default > первый с ролью;
-    embedding: use_as_embed_if_present > primary."""
-    llm = embed = None
-    for entry, _p in resolved_entries:
-        if "primary" in entry:
-            if entry.get("use_as_embed_if_present") or (embed is None and entry.get("primary")):
-                embed = entry["name"]
-            continue
-        if entry.get("use_as_default_if_present"):
-            llm = entry["name"]
-        elif llm is None and entry.get("role") == "coding":
-            llm = entry["name"]
-        elif llm is None and entry.get("role") == "default":
-            llm = entry["name"]
-        elif llm is None and entry.get("role"):
-            llm = entry["name"]
-    return llm, embed
-
-
-def install_web_deps() -> int:
-    """Install the web UI JS dependencies via corepack/pnpm; return exit status.
-
-    Runs `corepack enable`, then on success `pnpm install`, from the
-    repository root (packageManager in package.json pins pnpm). Executables
-    are resolved with shutil.which() so Windows .cmd shims (corepack.cmd,
-    pnpm.cmd) can be launched; missing Corepack returns 1, while unresolved
-    pnpm is launched by name. Nonzero statuses are
-    returned without raising; process launch errors (e.g. missing Corepack
-    executable) are converted to a nonzero status (1) instead of propagating,
-    so callers can keep their warning flow and still write start.bat.
-    """
-    print("[web   ] Ставлю JS-зависимости веб-интерфейса (corepack + pnpm) ...")
-    corepack = shutil.which("corepack")
-    if corepack is None:
-        print("[fail  ] corepack не найден в PATH — нужен Node.js 16.13+ "
-              "(https://nodejs.org); веб-интерфейс можно поставить позже: pnpm install")
-        return 1
-    try:
-        rc = run([corepack, "enable"])
-    except OSError as e:
-        print(f"[fail  ] corepack не запущен ({e}) — нужен Node.js 16.13+ "
-              "(https://nodejs.org); веб-интерфейс можно поставить позже: pnpm install")
-        return 1
-    if rc != 0:
-        print("[fail  ] corepack enable не удался — нужен Node.js 16.13+ "
-              "(https://nodejs.org); веб-интерфейс можно поставить позже: pnpm install")
-        return rc
-    pnpm = shutil.which("pnpm") or "pnpm"
-    try:
-        rc = run([pnpm, "install"])
-    except OSError as e:
-        print(f"[fail  ] pnpm не запущен ({e}); повторите позже: pnpm install")
-        return 1
-    if rc != 0:
-        print("[fail  ] pnpm install завершился с ошибкой;"
-              " повторите позже: pnpm install")
-    else:
-        print("[ok    ] Веб-интерфейс установлен: запуск `pnpm web:dev`,"
-              " затем http://127.0.0.1:19861/")
-    return rc
-
-
-START_BAT = """@echo off
-rem open-creator LOCAL — запуск стека (LLM :8484, embeddings :8512, MCP :8001 ...)
-setlocal
-chcp 65001 >nul
-cd /d "%~dp0"
-title open-creator LOCAL
-
-rem ---------------------------------------------------------------
-rem  start.bat   -> локальный стек (local-stack), затем веб-интерфейс
-rem  start.bat stop -> все сервисы стека остановить (Ctrl+C в этом окне)
-rem  Веб-интерфейс после старта: http://127.0.0.1:19861/
-rem  Модели берутся с диска (см. .env: LOCAL_STACK_MODELS) — без скачивания.
-rem ---------------------------------------------------------------
-
-if /i "%~1"=="stop" goto :stop
-
-if not exist "venv\\Scripts\\python.exe" goto install
-if not exist "venv\\.install-complete" goto install
-
-:start
-rem Интерпретатор для запуска стека: venv\\Scripts\\python.exe (он же активируется
-rem ниже); MM_PYTHON — только если это рабочий Python 3.12+ (старый не используем).
-set "PYEXE=venv\\Scripts\\python.exe"
-if defined MM_PYTHON if exist "%MM_PYTHON%" (
-    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1 && set "PYEXE=%MM_PYTHON%"
-)
-
-set PYTHONUTF8=1
-set PYTHONIOENCODING=utf-8
-set OPENCREATOR_LOCAL=1
-for /f "tokens=1,* delims==" %%a in ('findstr /b "LOCAL_STACK_MODELS=" .env') do set "%%a=%%b"
-for /f "tokens=1,* delims==" %%a in ('findstr /b "LOCAL_LLM_MODEL=" .env') do set "%%a=%%b"
-for /f "tokens=1,* delims==" %%a in ('findstr /b "LOCAL_EMBED_MODEL=" .env') do set "%%a=%%b"
-
-echo [1/2] Запускаю local-stack (llama-server :8484, embeddings :8512, MCP :8001)...
-rem Стек сам пишет PID-файл local-stack\\.pids — "start.bat stop" остановит только его
-start "open-creator-local-stack" cmd /k ""venv\\Scripts\\activate.bat" && python local-stack\\start.py"
-
-echo [2/2] Запускаю веб-интерфейс (pnpm web:dev)...
-timeout /t 5 /nobreak >nul
-start "" http://127.0.0.1:19861/
-rem PID-обёртка пишет .webui.pid и останавливает при Ctrl+C только своё дерево
-node scripts\\web-dev-wrapper.mjs pnpm web:dev
-
-echo Готово. Закройте окно стека или выполните: start.bat stop
-pause
-exit /b 0
-
-:install
-rem Установка не завершена — запускаем install.py доступным способом (без скачивания из сети).
-echo Установка не завершена — запускаю установку...
-set "INSTALL_OK="
-if defined MM_PYTHON if exist "%MM_PYTHON%" (
-    rem MM_PYTHON принимаем только если это Python 3.12+; иначе идём дальше
-    rem по цепочке поиска (venv, известный локальный Python312, py-лаунчер).
-    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
-    if not errorlevel 1 (
-        "%MM_PYTHON%" install.py %*
-        set "INSTALL_OK=1"
-        goto install_after
-    )
-)
-if exist "venv\\Scripts\\python.exe" (
-    rem Уже созданный venv имеет приоритет — ставим зависимости в него.
-    "venv\\Scripts\\python.exe" install.py %*
-    set "INSTALL_OK=1"
-    goto install_after
-)
-if exist "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" (
-    "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" install.py %*
-    set "INSTALL_OK=1"
-    goto install_after
-)
-if exist "C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" (
-    "C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" install.py %*
-    set "INSTALL_OK=1"
-    goto install_after
-)
-rem Python 3.12+ через py-лаунчер (проверяется наличие лаунчера и версии).
-where py >nul 2>&1
-if errorlevel 1 goto install_no_py
-py -3.12 -c "import sys" >nul 2>&1
-if not errorlevel 1 (
-    py -3.12 install.py %*
-    set "INSTALL_OK=1"
-    goto install_after
-)
-py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
-if errorlevel 1 goto install_bad_py
-py -3 install.py %*
-set "INSTALL_OK=1"
-
-:install_after
-if not defined INSTALL_OK goto install_no_py
-if not exist "venv\\Scripts\\python.exe" (
-    echo [fail] venv не создан после установки. См. сообщения выше.
-    pause
-    exit /b 1
-)
-if not exist "venv\\.install-complete" (
-    echo [fail] Установка не завершена ^(нет venv\\.install-complete^). См. сообщения выше.
-    pause
-    exit /b 1
-)
-goto start
-
-:install_no_py
-echo [fail] Не найден Python 3.12+ (нет venv и py-лаунчера).
-echo        Установите Python 3.12+ ^(https://python.org^) либо запустите явно:
-echo        "C:\\путь\\к\\python.exe" install.py, затем повторите start.bat
-pause
-exit /b 1
-
-:install_bad_py
-echo [fail] py-лаунчер найден, но Python 3.12+ среди установленных версий нет.
-echo        Установите Python 3.12+ ^(https://python.org^) и повторите start.bat
-pause
-exit /b 1
-
-:stop
-echo Останавливаю только процессы, записанные этим лаунчером (.pids / .webui.pid) ...
-rem Стек: local-stack/start.py --stop шлёт сигнал только PID из local-stack\\.pids
-if exist "venv\\Scripts\\python.exe" ("venv\\Scripts\\python.exe" local-stack\\start.py --stop) else (python local-stack\\start.py --stop)
-rem Веб-интерфейс: обёртка сверяет имя процесса перед остановкой; чужие не трогает
-if exist ".webui.pid" (
-    node scripts\\web-dev-wrapper.mjs --stop ".webui.pid" || echo [warn] веб-интерфейс: процесс не найден или уже завершён
-    del /q ".webui.pid" 2>nul
-) else (
-    echo [skip] .webui.pid нет — веб-интерфейс не запускался этим лаунчером
-)
-echo Готово. Чужие llama-server и слушатели портов не тронуты.
-exit /b 0
-
-endlocal
-"""
-
-
-def write_start_bat() -> None:
-    """Ensure ROOT/start.bat matches START_BAT encoded as UTF-8 with CRLF newlines.
-
-    Windows batch files must use CRLF line endings (cmd.exe breaks on bare
-    LF), so every newline in START_BAT is converted before writing. Leave a
-    matching launcher untouched; otherwise create or overwrite it.
-    Then touch INSTALL_COMPLETE inside the venv, creating its parent directory
-    if needed. Filesystem errors propagate as OSError; an existing completion
-    marker is not removed on failure.
-    """
-    bat = ROOT / "start.bat"
-    data = START_BAT.replace("\n", "\r\n").encode("utf-8")
-    if not bat.exists() or bat.read_bytes() != data:
-        bat.write_bytes(data)
-    INSTALL_COMPLETE.parent.mkdir(parents=True, exist_ok=True)
-    INSTALL_COMPLETE.touch()
-    print(f"[ok    ] Создан {bat.name}: двойной клик или .\\start.bat")
-
-
-def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
-    """Return (base_python, copy_models, download_names, download_all) from argv.
+def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool, bool]:
+    """Return (base_python, check_models, download_names, download_all, selftest).
 
     --python takes the following value (first occurrence wins);
-    --copy-models enables copying into ./local-stack/models;
+    --check-models only prints the local model report (no writes at all);
     --download-models [names...] enables HF downloads for the listed files
     (or everything missing when no names given — then download_all is True;
     the explicit flag is never silently dropped). Positional values that do
@@ -701,7 +401,7 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     base_python = default_python()
-    copy_models = "--copy-models" in argv
+    check_models = "--check-models" in argv
     download_names: list[str] = []
     dl_enabled = "--download-models" in argv
     if dl_enabled:
@@ -733,54 +433,30 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
             print(f"[i    ] Интерпретатор {base_python!r} ниже 3.12 — "
                   f"venv создам через py -{py_ver}")
             base_python = py_ver
-    return base_python, copy_models, download_names, download_all
-
-
-def models_home_for(resolved: list[tuple[dict, Path]], reg: dict) -> str | None:
-    """Папка для LOCAL_STACK_MODELS — только если в ней реально есть всё нужное.
-
-    Возвращает str(MODELS_DIR), лишь когда каждая разрешившаяся модель и её
-    mmproj физически лежат в ./local-stack/models (при --copy-models — после
-    копирования; иначе — когда симлинки создались либо файл уже был там).
-    Если общую папку гарантировать нельзя (например, Windows без прав на
-    симлинки и разные исходные папки), возвращаем None — вызывающий обязан
-    сообщить о проблеме и порекомендовать --copy-models."""
-    if not resolved:
-        return None
-    roots = reg.get("roots", [])
-    for entry, path in resolved:
-        target = MODELS_DIR / entry["name"]
-        if not target.is_file():
-            return None
-        if entry.get("mmproj_candidates"):
-            mmproj = None
-            for cand in entry["mmproj_candidates"]:
-                mmproj = find_local_file(cand, roots)
-                if mmproj:
-                    break
-            if mmproj is not None and not (MODELS_DIR / mmproj.name).is_file():
-                return None
-    return str(MODELS_DIR)
+    return base_python, check_models, download_names, download_all, "--self-test" in argv
 
 
 def main(argv: list[str]) -> int:
-    """Prepare the venv, install dependencies, wire local models, write start.bat.
+    """Prepare the venv, install dependencies, report models, write marker.
 
-    Models are NEVER downloaded by default: they are located on disk via
-    docs/local_models.json and exposed to local-stack through .env
-    (LOCAL_STACK_MODELS / LOCAL_LLM_MODEL / LOCAL_EMBED_MODEL). Downloads
-    happen only with an explicit --download-models flag. Return the nonzero
-    model-setup status if no usable LLM/embedding was found, otherwise finish
-    with web dependencies (warn-only), start.bat and the completion marker.
+    Models are NEVER downloaded or copied by default: they stay exactly where
+    they are (docs/models.txt lists them; ComfyUI reads them via model_roots
+    in config.json). Downloads happen only with an explicit --download-models
+    flag. Finish with the completion marker venv/.install-complete, which
+    start.bat / ui.bat check before launching.
     """
-    base_python, copy_models, download_names, download_all = parse_args(argv)
+    base_python, check_models, download_names, download_all, selftest = parse_args(argv)
 
-    print("=== open-creator LOCAL installer (всё в этой папке, модели — без скачивания) ===")
+    print("=== CWBuilder installer (всё в этой папке, модели — без скачивания) ===")
+    if selftest:
+        return _test_mode()
     py = ensure_venv(base_python)
     INSTALL_COMPLETE.unlink(missing_ok=True)
     activate_and_install(py)
 
     reg = load_registry()
+    if check_models:
+        return report_models(reg)
     if download_all:
         # --download-models без имён: докачиваем ровно все недостающие
         # обязательные модели (реестр уже может быть частично найден локально).
@@ -791,51 +467,20 @@ def main(argv: list[str]) -> int:
         else:
             print("[i    ] --download-models без имён: все обязательные модели"
                   " уже есть локально — докачка не требуется.")
-    models_rc = wire_models(reg, py, copy_models, download_names)
-    entries = list(reg.get("models", {}).get("llm", [])) + \
-        list(reg.get("models", {}).get("embeddings", []))
-    resolved = [(e, RESOLVED_PATHS[id(e)]) for e in entries
-                if RESOLVED_PATHS.get(id(e)) is not None]
-    llm, embed = pick_defaults(resolved)
-    # LOCAL_STACK_MODELS указываем на ./local-stack/models ТОЛЬКО когда в ней
-    # гарантированно лежат все нужные файлы (скопированы при --copy-models или
-    # симлинки создались). Иначе — на реальную папку, где лежит единственный
-    # общий набор; если единой папки нет — прерываем установку с рекомендацией.
-    common_dir = models_home_for(resolved, reg)
-    if common_dir is not None:
-        models_home = common_dir
-    elif not resolved:
-        # Пустой список разрешённых моделей: общую папку выбрать нельзя —
-        # не пишем домысленный LOCAL_STACK_MODELS (write_env опустит ключ).
-        models_home = None
+    if download_names:
+        rc = download_models(py, download_names)
+        if rc != 0:
+            print("[warn] Докачка завершилась с ошибками; установка продолжена"
+                  " (модели можно положить вручную, см. docs/models.txt).")
     else:
-        homes = {str(p.parent) for _e, p in resolved}
-        if len(homes) == 1:
-            models_home = next(iter(homes))
-        else:
-            print("[fail] Не удалось собрать все модели в одной папке:"
-                  " симлинки в ./local-stack/models не создаются (нет прав)"
-                  " и исходные GGUF лежат в разных директориях:")
-            for h in sorted(homes):
-                print(f"       {h}")
-            print("       Запустите установку с копированием весов в одну папку:")
-            print("           python install.py --copy-models")
-            return 1
-    write_env(llm, embed, models_home)
-    if models_rc != 0:
-        print("[fail] Установка не завершена: подходящих локальных моделей нет."
-              " Добавьте пути в docs/local_models.json или разрешите докачку:"
-              " python install.py --download-models")
-        return models_rc
-    web_rc = install_web_deps()
-    if web_rc != 0:
-        print("[warn] Веб-интерфейс не установлен (нужен Node.js + pnpm);"
-              " Python-стек готов, повторите позже: corepack enable && pnpm install")
-    write_start_bat()
+        print("[i    ] Скачивание с Hugging Face ОТКЛЮЧЕНО: используются только"
+              " модели, которые уже есть на диске (docs/local_models.json).")
+        report_models(reg)
+
     INSTALL_COMPLETE.parent.mkdir(parents=True, exist_ok=True)
     INSTALL_COMPLETE.touch()
-    print("=== Готово. Запуск: start.bat (стек + веб-интерфейс :19861). "
-          "Модели подключены с диска, 0 байт скачано. ===")
+    print("=== Готово. Запуск: start.bat (меню) или ui.bat (Gradio UI :7865). "
+          "Модели берутся с диска, 0 байт скачано. ===")
     return 0
 
 
@@ -849,7 +494,7 @@ def find_first(entry: dict, roots: list[str]) -> Path | None:
 
 
 def _test_mode() -> int:
-    """Self-check без сети/venv/pnpm: реестр + поиск по фиктивному дереву.
+    """Self-check без сети/venv: реестр + поиск по фиктивному дереву.
 
     Возвращает 0 при успехе; используется для проверки install.py на машине,
     где Windows-папок из реестра нет."""
@@ -874,25 +519,44 @@ def _test_mode() -> int:
             (root / "LLM" / "GGUF" / name).write_text("x")
         test_reg = {"roots": [str(root)], "models": reg["models"]}
         entries = test_reg["models"]["llm"] + test_reg["models"]["embeddings"]
-        RESOLVED_PATHS.clear()
         resolved = []
         for e in entries:
             p = find_first(e, test_reg["roots"])
-            RESOLVED_PATHS[id(e)] = p
             if p:
                 resolved.append((e, p))
-        llm, embed = pick_defaults(resolved)
-        assert llm and llm.endswith(".gguf"), f"не выбрана LLM: {llm}"
-        assert embed == "embeddinggemma-2-Q8_0.gguf", f"embed: {embed}"
         missing = check_comfy_models(test_reg)
-        assert all("safetensors" in m for m in missing), missing
-    print("[test  ] OK: реестр читается, поиск/выбор работают, сеть не трогается")
+        assert all("safetensors" in m or m.endswith(".gguf") for m in missing), missing
+    print("[test  ] OK: реестр читается, поиск работает, сеть не трогается")
+    return 0
+
+
+def _self_check() -> int:
+    """Проверка без сети/venv: только компиляция исходников проекта.
+
+    Вызывается из start.bat/ui.bat перед запуском (python -m install --check).
+    Возвращает число ошибок (0 = всё скомпилировалось)."""
+    import py_compile
+
+    files = [ROOT / "install.py", ROOT / "src" / "mm.py"] + sorted((ROOT / "src").glob("mm_*.py"))
+    errors = 0
+    for f in files:
+        try:
+            py_compile.compile(str(f), doraise=True)
+        except Exception as e:  # noqa: BLE001 — показать и продолжить
+            print(f"[fail] {f.name}: {e}")
+            errors += 1
+    if errors:
+        print(f"[fail] Самопроверка: ошибок {errors}")
+        return errors
+    print("[ok    ] Самопроверка пройдена: install.py и src/*.py компилируются")
     return 0
 
 
 if __name__ == "__main__":
     if "--self-test" in sys.argv[1:]:
         raise SystemExit(_test_mode())
+    if "--check" in sys.argv[1:]:
+        raise SystemExit(1 if _self_check() else 0)
     try:
         raise SystemExit(main(sys.argv[1:]))
     except SystemExit as e:
