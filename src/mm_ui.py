@@ -57,6 +57,7 @@ DEFAULTS = {"mode": "minimax_h3", "aspect": "16:9 (Widescreen)", "mp": 0.5,
 # ───────────────────────────── Zustand ─────────────────────────────
 
 def load_state() -> dict:
+    """Gespeicherte UI-Werte mit Defaults ergaenzen; bei Lesefehlern Defaults liefern."""
     try:
         if STATE_PATH.exists():
             return {**DEFAULTS, **json.loads(C.read_text(STATE_PATH))}
@@ -66,6 +67,7 @@ def load_state() -> dict:
 
 
 def save_state(patch: dict) -> None:
+    """UI-Werte zusammenfuehren und speichern; Schreibfehler ignorieren."""
     st = load_state()
     st.update(patch)
     try:
@@ -80,6 +82,7 @@ _cat_cache: dict[str, tuple[float, object]] = {}
 
 
 def catalog_for(target_name: str):
+    """Modellkatalog des Ziels liefern und fuer 60 Sekunden zwischenspeichern."""
     now = time.time()
     hit = _cat_cache.get(target_name)
     if hit and now - hit[0] < 60:
@@ -104,6 +107,7 @@ def combo(target_name: str, kind: str, needle: str | None = None, current: str |
 
 
 def server_status_md() -> str:
+    """Erreichbarkeit der Bild- und Video-Server als Markdown anzeigen."""
     parts = []
     for name in ("image", "video"):
         t = C.target(CFG, name)
@@ -115,6 +119,7 @@ def server_status_md() -> str:
 # ───────────────────────────── Sichtbarkeit je Modus ─────────────────────────────
 
 def layout_for(mode: str) -> dict:
+    """Sichtbarkeit der Optionsgruppen fuer den gewaehlten Modus bestimmen."""
     v = mode in VIDEO_MODES
     img = mode in IMAGE_MODES
     edit = mode in ("qwen-edit", "qwen21", "klein9b", "klein4b", "flux3", "minimax_h3")
@@ -139,6 +144,11 @@ def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_of
                 seed, negative, ref_files, width, height, batch,
                 unet, clip, vae, loras_txt, control_on, control_kind, control_img,
                 run_now, out_json, progress=gr.Progress()):
+    """Workflow erstellen und speichern, optional ausfuehren und Ergebnisse abrufen.
+
+    Gibt Protokolltext sowie Gradio-Updates fuer Video und Bilder zurueck.
+    Die Generierung wird ueber den gemeinsamen Lock serialisiert.
+    """
     prompt = (prompt or "").strip()
     if not prompt:
         pf = C.abspath(CFG.get("prompt_file", "prompts/prompt.txt"))
@@ -149,10 +159,12 @@ def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_of
     lines: list[str] = []
 
     def log(s):
+        """Nachricht im Terminal ausgeben und fuer das Ergebnisprotokoll sammeln."""
         print(s, flush=True)
         lines.append(str(s))
 
     def resolve_out(p: str, stamp: str) -> Path:
+        """Ausgabepfad relativ zur Projektwurzel oder mit Standardnamen bestimmen."""
         p = (p or "").strip()
         if not p:
             return C.output_dir(CFG) / f"mm_{mode}_{stamp}.api.json"
@@ -285,6 +297,7 @@ def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_of
 # ───────────────────────────── GUI ─────────────────────────────
 
 def build_ui() -> gr.Blocks:
+    """Gradio-Oberflaeche mit gespeicherten Werten und Ereignis-Callbacks erstellen."""
     st = load_state()
     css = ".tiny {font-size:12px;color:#888;} footer {display:none!important;}"
     with gr.Blocks(title="CWBuilder", css=css, theme=gr.themes.Soft()) as app:
@@ -339,6 +352,7 @@ def build_ui() -> gr.Blocks:
                 gallery = gr.Gallery(label="Bilder", columns=2)
 
         def apply_mode(m, u, c, v):
+            """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern."""
             vis = layout_for(m)
             save_state({"mode": m})
             tgt_name = "video" if m in VIDEO_MODES else "image"
@@ -365,6 +379,7 @@ def build_ui() -> gr.Blocks:
         mode.change(apply_mode, [mode, unet, clip, vae], outputs)
 
         def gen(*a):
+            """Dateieingaben normalisieren, Generierung starten und erfolgreiche Auswahl speichern."""
             (prompt_v, mode_v, aspect_v, mp_v, dur_v, fps_v, steps_v, turbo_v, off_v,
              seed_v, neg_v, ref_v, w_v, h_v, b_v, unet_v, clip_v, vae_v, loras_v,
              ctl_on_v, ctl_kind_v, ctl_img_v, run_v, out_v) = a
@@ -390,6 +405,7 @@ def build_ui() -> gr.Blocks:
 
 
 def main() -> None:
+    """Gradio-Oberflaeche mit serieller Queue lokal auf Port 7865 starten."""
     app = build_ui()
     app.queue(default_concurrency_limit=1).launch(
         server_name="127.0.0.1", server_port=7865, share=False,

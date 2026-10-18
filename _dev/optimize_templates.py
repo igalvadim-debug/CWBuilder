@@ -22,6 +22,7 @@ TPL.mkdir(exist_ok=True)
 
 
 def strip_node(n: dict) -> dict:
+    """Kopierten Knoten auf Vorlagenfelder reduzieren und Modus auf normal setzen."""
     keep = ("id", "type", "inputs", "outputs", "widgets_values", "properties", "title")
     m = {k: n[k] for k in keep if k in n}
     m["mode"] = 0
@@ -44,6 +45,7 @@ def clean_widgets(wf: dict) -> None:
 
 
 def prune(wf: dict, drop_ids: set[int]) -> dict:
+    """Knoten und zugehoerige Verbindungen in-place entfernen; Workflow zurueckgeben."""
     wf["nodes"] = [n for n in wf["nodes"] if n["id"] not in drop_ids]
     links = {}
     for l in wf.get("links", []):
@@ -66,6 +68,7 @@ def prune(wf: dict, drop_ids: set[int]) -> dict:
 
 
 def fix_ltx(src: Path, dst: Path) -> None:
+    """LTX-Workflow bereinigen, Prompt-Upsampler ausschalten und kompakt speichern."""
     wf = json.loads(src.read_text(encoding="utf-8"))
     byid = {n["id"]: n for n in wf["nodes"]}
     # Prompt-Upsampler im eingebauten Workflow standardmaessig AUS (Turbo/Pfad kurz halten)
@@ -91,6 +94,7 @@ def fix_ltx(src: Path, dst: Path) -> None:
 
 
 def fix_minimax(src: Path, dst: Path) -> None:
+    """Ungenutzte MiniMax-Vorschauknoten entfernen und bereinigte Vorlage speichern."""
     wf = json.loads(src.read_text(encoding="utf-8"))
     # ungenutzte Preview-/Compose-Kette ohne Abnehmer entfernen
     used = {l[3] for l in wf.get("links", [])}
