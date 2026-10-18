@@ -69,11 +69,11 @@ def known_local_python() -> str:
 
 
 def default_python() -> str:
-    """Base interpreter for creating the venv (see KNOWN_LOCAL_PYTHONS above).
+    """Select a base interpreter path without checking its Python version.
 
-    Приоритет: MM_PYTHON (принимаем любой непустой существующий путь — его
-    версию проверит parse_args/ensure_venv) > известный локальный Python312 >
-    sys.executable (тот, которым запущен сам install.py).
+    Prefer MM_PYTHON after stripping surrounding whitespace and double quotes,
+    if it names an existing file; otherwise use known_local_python(), then
+    sys.executable. MM_PYTHON need not be executable or a supported Python.
     """
     mm_python = _clean_path(os.environ.get("MM_PYTHON", ""))
     if mm_python and Path(mm_python).is_file():
@@ -696,21 +696,27 @@ def _clean_path(value: str) -> str:
 def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
     """Return (base_python, copy_models, download_names, download_all) from argv.
 
-    Priority for the base interpreter: first '--python <exe>' occurrence >
-    first positional value not starting with '-' > MM_PYTHON > known local
-    Python312 > sys.executable. An explicitly supplied interpreter is taken
-    verbatim even if it does not exist yet (it may be created later); only the
-    environment-derived fallback (MM_PYTHON) must name an existing file.
-    '--copy-models' enables copying into ./local-stack/models;
-    '--download-models [names...]' enables HF downloads for the listed files
-    (or everything missing when no names given — then download_all is True;
-    the explicit flag is never silently dropped). Values after '--python' and
-    after '--download-models' are consumed as its option value / model names
-    and can never be mistaken for the positional interpreter. Quoted paths
-    (with surrounding spaces) are normalized. PYTHONUTF8/PYTHONIOENCODING are
-    exported to all child processes (setdefault — caller's values win) so
-    install.py and its subprocesses always run in UTF-8 on Windows. The argv
-    list itself is never mutated.
+    Prefer the value following the first '--python', then the first positional
+    interpreter, then MM_PYTHON if it names an existing file. Strip surrounding
+    whitespace and double quotes from interpreter values; empty values fall
+    through. Explicit paths are accepted without existence or version checks,
+    and MM_PYTHON is not version-checked here. A missing '--python' value falls
+    through, but an option immediately following it is accepted as its value.
+    Positional selection skips '--python' values and stops at the first model
+    name after '--download-models', ignoring later positional candidates.
+
+    Otherwise use default_python(). If that interpreter fails the Python 3.12+
+    probe, try the Windows py launcher; return its supported version string
+    (e.g. '3.12') if found, or retain the original path if none is found.
+
+    '--copy-models' sets copy_models for copying into ./local-stack/models.
+    download_names contains consecutive values after the first
+    '--download-models', stopping at any value starting with '-'. If that flag
+    is present with no names, download_all is True so the caller can select
+    all missing required models. Parsing itself neither copies nor downloads.
+
+    Set PYTHONUTF8 to '1' and PYTHONIOENCODING to 'utf-8' in os.environ only
+    when unset, preserving caller overrides. The argv list is not mutated.
     """
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
