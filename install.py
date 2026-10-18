@@ -590,10 +590,14 @@ exit /b 0
 rem Установка не завершена — запускаем install.py доступным способом (без скачивания из сети).
 echo Установка не завершена — запускаю установку...
 set "INSTALL_OK="
+rem MM_PYTHON проверяется на Python 3.12+; неподходящий — переход к остальным кандидатам.
 if defined MM_PYTHON if exist "%MM_PYTHON%" (
-    "%MM_PYTHON%" install.py %*
-    set "INSTALL_OK=1"
-    goto install_after
+    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
+    if not errorlevel 1 (
+        "%MM_PYTHON%" install.py %*
+        set "INSTALL_OK=1"
+        goto install_after
+    )
 )
 if exist "venv\\Scripts\\python.exe" (
     rem Уже созданный venv имеет приоритет — ставим зависимости в него.
