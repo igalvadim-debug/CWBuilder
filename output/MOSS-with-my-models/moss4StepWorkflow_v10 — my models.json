@@ -1,0 +1,756 @@
+{
+ "id": "84fc35e2-122a-4f72-8a23-44ec88c1e70a",
+ "revision": 0,
+ "last_node_id": 16,
+ "last_link_id": 18,
+ "nodes": [
+  {
+   "id": 2,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    474,
+    33
+   ],
+   "size": [
+    380,
+    146
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "type": "MODEL",
+     "link": 13,
+     "name": "model"
+    },
+    {
+     "type": "STRING",
+     "widget": {
+      "name": "lora_name"
+     },
+     "name": "lora_name",
+     "link": null
+    },
+    {
+     "type": "FLOAT",
+     "widget": {
+      "name": "strength_model"
+     },
+     "name": "strength_model",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "type": "MODEL",
+     "links": [
+      3,
+      16,
+      17
+     ],
+     "slot_index": 0,
+     "name": "MODEL"
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoraLoaderModelOnly"
+   },
+   "widgets_values": [
+    "MOSS\\MOSS-Image-SFT-8-steps-dmd.safetensors",
+    1.0
+   ],
+   "widgets_values_named": {
+    "adapter": "MOSS-Image-SFT-8-steps-dmd",
+    "steps": 4,
+    "lora_strength": 1
+   },
+   "title": "Turbo LoRA (MOSS-Image-SFT 8-step DMD)"
+  },
+  {
+   "id": 3,
+   "type": "CLIPTextEncode",
+   "pos": [
+    470,
+    250
+   ],
+   "size": [
+    425,
+    317
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 2
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      4
+     ]
+    }
+   ],
+   "title": "Prompt",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "A professionally retouched, realistic photograph taken at a Shanghai convention; cinematic-grade image quality with high contrast, high saturation, and high clarity.\nA real-life human subject—a stunning 26-year-old mixed-race girl—is cosplaying. She has a slender, flat-chested build and is looking down at the camera with an expression of disdain (captured from a slightly low angle, showing her upper body, with her legs extending out of the frame). \ncosplay服装特征如下：\n\n「angewomon, digimon, 1girl, angel wings, angel, angel wings, blonde hair, long hair, large breasts, cleavage, thigh strap, navel, winged helmet, asymmetrical clothes, white gloves, bare shoulders, belt, feathered wings, head wings, multiple wings, white wings, feathered wings, multiple wings, white wings, digimon \\(creature\\), hagoromo」"
+   ],
+   "widgets_values_named": {
+    "text": "A professionally retouched, realistic photograph taken at a Shanghai convention; cinematic-grade image quality with high contrast, high saturation, and high clarity.\nA real-life human subject—a stunning 26-year-old mixed-race girl—is cosplaying. She has a slender, flat-chested build and is looking down at the camera with an expression of disdain (captured from a slightly low angle, showing her upper body, with her legs extending out of the frame). \ncosplay服装特征如下：\n\n「angewomon, digimon, 1girl, angel wings, angel, angel wings, blonde hair, long hair, large breasts, cleavage, thigh strap, navel, winged helmet, asymmetrical clothes, white gloves, bare shoulders, belt, feathered wings, head wings, multiple wings, white wings, feathered wings, multiple wings, white wings, digimon \\(creature\\), hagoromo」"
+   }
+  },
+  {
+   "id": 4,
+   "type": "BasicGuider",
+   "pos": [
+    940,
+    60
+   ],
+   "size": [
+    260,
+    50
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 3
+    },
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 4
+    }
+   ],
+   "outputs": [
+    {
+     "name": "GUIDER",
+     "type": "GUIDER",
+     "slot_index": 0,
+     "links": [
+      6
+     ]
+    }
+   ],
+   "title": "BasicGuider (no CFG)",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "BasicGuider"
+   }
+  },
+  {
+   "id": 5,
+   "type": "RandomNoise",
+   "pos": [
+    940,
+    160
+   ],
+   "size": [
+    260,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "NOISE",
+     "type": "NOISE",
+     "slot_index": 0,
+     "links": [
+      5
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "RandomNoise"
+   },
+   "widgets_values": [
+    200261573947703,
+    "randomize"
+   ],
+   "widgets_values_named": {
+    "noise_seed": 200261573947703,
+    "control_after_generate": "randomize"
+   }
+  },
+  {
+   "id": 6,
+   "type": "EmptyFlux2LatentImage",
+   "pos": [
+    940,
+    290
+   ],
+   "size": [
+    260,
+    106
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 0,
+     "links": [
+      9
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "EmptyFlux2LatentImage"
+   },
+   "widgets_values": [
+    768,
+    1344,
+    1
+   ],
+   "widgets_values_named": {
+    "width": 768,
+    "height": 1344,
+    "batch_size": 1
+   }
+  },
+  {
+   "id": 7,
+   "type": "SamplerCustomAdvanced",
+   "pos": [
+    1250,
+    60
+   ],
+   "size": [
+    300,
+    110
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "noise",
+     "type": "NOISE",
+     "link": 5
+    },
+    {
+     "name": "guider",
+     "type": "GUIDER",
+     "link": 6
+    },
+    {
+     "name": "sampler",
+     "type": "SAMPLER",
+     "link": 7
+    },
+    {
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "link": 8
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 9
+    }
+   ],
+   "outputs": [
+    {
+     "name": "output",
+     "type": "LATENT",
+     "slot_index": 0,
+     "links": [
+      10
+     ]
+    },
+    {
+     "name": "denoised_output",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "SamplerCustomAdvanced"
+   }
+  },
+  {
+   "id": 8,
+   "type": "VAEDecode",
+   "pos": [
+    1250,
+    230
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 10
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 11
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "slot_index": 0,
+     "links": [
+      12
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "VAEDecode"
+   }
+  },
+  {
+   "id": 9,
+   "type": "SaveImage",
+   "pos": [
+    1600,
+    60
+   ],
+   "size": [
+    520,
+    560
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 12
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "rapid-moss"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "rapid-moss"
+   }
+  },
+  {
+   "id": 11,
+   "type": "MOSSImageCLIPLoader",
+   "pos": [
+    22,
+    220
+   ],
+   "size": [
+    420,
+    82
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "slot_index": 0,
+     "links": [
+      2
+     ]
+    }
+   ],
+   "title": "MOSS-Image Load Qwen3.5 (int8)",
+   "properties": {
+    "Node name for S&R": "MOSSImageCLIPLoader"
+   },
+   "widgets_values": [
+    "qwen3.5_9b_int8_convrot.safetensors",
+    "default"
+   ],
+   "widgets_values_named": {
+    "clip_name": "qwen3.5_9b_int8_convrot.safetensors",
+    "device": "default"
+   }
+  },
+  {
+   "id": 12,
+   "type": "VAELoader",
+   "pos": [
+    40,
+    340
+   ],
+   "size": [
+    420,
+    58
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "slot_index": 0,
+     "links": [
+      11
+     ]
+    }
+   ],
+   "title": "VAE (MOSS-Image SFT)",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.41.0",
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "flux2_vae.safetensors"
+   ],
+   "widgets_values_named": {
+    "vae_name": "flux2_vae.safetensors"
+   }
+  },
+  {
+   "id": 13,
+   "type": "MOSSImageUNETLoader",
+   "pos": [
+    63,
+    -48
+   ],
+   "size": [
+    333,
+    82
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      13
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MOSSImageUNETLoader"
+   },
+   "widgets_values": [
+    "moss_image_sft_int8_convrot.safetensors",
+    "default"
+   ],
+   "widgets_values_named": {
+    "unet_name": "moss_image_sft_int8_convrot.safetensors",
+    "weight_dtype": "default"
+   }
+  },
+  {
+   "id": 14,
+   "type": "BasicKSamplerProvider",
+   "pos": [
+    834,
+    153
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "title": "Sampler: euler a",
+   "inputs": [
+    {
+     "name": "model",
+     "shape": 7,
+     "type": "MODEL",
+     "link": 16
+    },
+    {
+     "name": "seed",
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "SAMPLER",
+     "type": "SAMPLER",
+     "links": [
+      7
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicKSamplerProvider"
+   },
+   "widgets_values": [
+    "euler_a"
+   ]
+  },
+  {
+   "id": 15,
+   "type": "BasicScheduler",
+   "pos": [
+    834,
+    253
+   ],
+   "size": [
+    240,
+    106
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "title": "8 steps, denoise 1",
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 17
+    },
+    {
+     "name": "clip",
+     "shape": 7,
+     "type": "CLIP",
+     "link": null
+    },
+    {
+     "name": "scheduler",
+     "type": "STRING",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "SIGMAS",
+     "type": "SIGMAS",
+     "links": [
+      8
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicScheduler"
+   },
+   "widgets_values": [
+    "simple",
+    8,
+    1.0
+   ]
+  }
+ ],
+ "links": [
+  [
+   2,
+   11,
+   0,
+   3,
+   0,
+   "CLIP"
+  ],
+  [
+   3,
+   2,
+   0,
+   4,
+   0,
+   "MODEL"
+  ],
+  [
+   4,
+   3,
+   0,
+   4,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   5,
+   5,
+   0,
+   7,
+   0,
+   "NOISE"
+  ],
+  [
+   6,
+   4,
+   0,
+   7,
+   1,
+   "GUIDER"
+  ],
+  [
+   9,
+   6,
+   0,
+   7,
+   4,
+   "LATENT"
+  ],
+  [
+   10,
+   7,
+   0,
+   8,
+   0,
+   "LATENT"
+  ],
+  [
+   11,
+   12,
+   0,
+   8,
+   1,
+   "VAE"
+  ],
+  [
+   12,
+   8,
+   0,
+   9,
+   0,
+   "IMAGE"
+  ],
+  [
+   13,
+   13,
+   0,
+   2,
+   0,
+   "MODEL"
+  ],
+  [
+   16,
+   2,
+   0,
+   14,
+   0,
+   "MODEL"
+  ],
+  [
+   17,
+   2,
+   0,
+   15,
+   0,
+   "MODEL"
+  ],
+  [
+   7,
+   14,
+   0,
+   7,
+   2,
+   "SAMPLER"
+  ],
+  [
+   8,
+   15,
+   0,
+   7,
+   3,
+   "SIGMAS"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 1.5108482912133796,
+   "offset": [
+    -79,
+    177
+   ]
+  },
+  "frontendVersion": "1.55.17",
+  "VHS_latentpreview": false,
+  "VHS_latentpreviewrate": 0,
+  "VHS_MetadataImage": true,
+  "VHS_KeepIntermediate": true
+ },
+ "extensions": {
+  "widget_idx_map": {
+   "5": {
+    "noise_seed": 0
+   }
+  },
+  "seed_widgets": {
+   "5": 0
+  }
+ },
+ "version": 0.4
+}
