@@ -453,6 +453,11 @@ if not exist "venv\\Scripts\\python.exe" goto install
 if not exist "venv\\.install-complete" goto install
 
 :start
+rem Интерпретатор для запуска стека: MM_PYTHON (например, ваш Python 3.12 вне
+rem PATH), затем venv\\Scripts\\python.exe (он же активируется ниже).
+set "PYEXE=venv\\Scripts\\python.exe"
+if defined MM_PYTHON if exist "%MM_PYTHON%" set "PYEXE=%MM_PYTHON%"
+
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 set OPENCREATOR_LOCAL=1
@@ -477,28 +482,46 @@ exit /b 0
 :install
 rem Установка не завершена — запускаем install.py доступным способом (без скачивания из сети).
 echo Установка не завершена — запускаю установку...
+set "INSTALL_OK="
+if defined MM_PYTHON if exist "%MM_PYTHON%" (
+    "%MM_PYTHON%" install.py %*
+    set "INSTALL_OK=1"
+    goto install_after
+)
 if exist "venv\\Scripts\\python.exe" (
     rem Уже созданный venv имеет приоритет — ставим зависимости в него.
     "venv\\Scripts\\python.exe" install.py %*
-) else if exist "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" (
-    "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" install.py %*
-) else (
-    rem Python 3.12+ через py-лаунчер (проверяется наличие лаунчера и версии).
-    where py >nul 2>&1
-    if errorlevel 1 goto install_no_py
-    py -3.12 -c "import sys" >nul 2>&1
-    if not errorlevel 1 (
-        py -3.12 install.py %*
-        goto install_done
-    )
-    py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
-    if errorlevel 1 goto install_bad_py
-    py -3 install.py %*
-    goto install_done
+    set "INSTALL_OK=1"
+    goto install_after
 )
-:install_done
-if errorlevel 1 (
-    echo [fail] Установка не удалась.
+if exist "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" (
+    "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" install.py %*
+    set "INSTALL_OK=1"
+    goto install_after
+)
+rem Python 3.12+ через py-лаунчер (проверяется наличие лаунчера и версии).
+where py >nul 2>&1
+if errorlevel 1 goto install_no_py
+py -3.12 -c "import sys" >nul 2>&1
+if not errorlevel 1 (
+    py -3.12 install.py %*
+    set "INSTALL_OK=1"
+    goto install_after
+)
+py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
+if errorlevel 1 goto install_bad_py
+py -3 install.py %*
+set "INSTALL_OK=1"
+
+:install_after
+if not defined INSTALL_OK goto install_no_py
+if not exist "venv\\Scripts\\python.exe" (
+    echo [fail] venv не создан после установки. См. сообщения выше.
+    pause
+    exit /b 1
+)
+if not exist "venv\\.install-complete" (
+    echo [fail] Установка не завершена ^(нет venv\\.install-complete^). См. сообщения выше.
     pause
     exit /b 1
 )
@@ -563,8 +586,17 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
     (or everything missing when no names given — then download_all is True;
     the explicit flag is never silently dropped). Positional values that do
     not start with '-' select the base interpreter.
+    Environment fallbacks: MM_PYTHON (the variable used by start.bat to point
+    at a Python outside PATH) and PYTHONUTF8/PYTHONIOENCODING are exported to
+    all child processes so install.py and its subprocesses always run in UTF-8
+    on Windows.
     """
+    os.environ.setdefault("PYTHONUTF8", "1")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     base_python = DEFAULT_PYTHON
+    mm_python = os.environ.get("MM_PYTHON", "").strip('"').strip()
+    if mm_python and Path(mm_python).exists():
+        base_python = mm_python
     copy_models = "--copy-models" in argv
     download_names: list[str] = []
     dl_enabled = "--download-models" in argv
