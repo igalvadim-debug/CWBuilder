@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -123,6 +124,18 @@ def _apply_lanpaint_patch(node: dict, on: bool) -> None:
     wv = node.get("widgets_values")
     if isinstance(wv, list) and len(wv) > 12:
         wv[12] = 3 if on else 0
+
+
+def _loras_markup(p: MossParams) -> str:
+    """Benutzer-LoRAs im Textformat des LoraManager liefern."""
+    return " ".join(f"<lora:{name}:{strength}>" for name, strength in p.loras)
+
+
+def _default_system_prompt() -> str:
+    """Standardanweisung fuer den MOSS-Prompt-Enhancer liefern."""
+    return ("Expand the user's idea into a detailed image generation prompt. "
+            "Describe the subjects, composition, setting, lighting, colors and style. "
+            "Preserve the user's intent and return only the enhanced prompt.")
 
 
 # ───────────────────────────── Pattern pro Modus ─────────────────────────────
@@ -237,15 +250,14 @@ def _patch_enhance(wf, p, info):
     if p.images:
         _set_widget(img, 0, p.images[0])
     else:
-        _drop_link(gen, "image")
-        _drop_link(img, "IMAGE")
+        _drop_link(wf, img, "IMAGE")
         info["notes"].append("Ohne Bild: reiner Text-Enhancer (Vision-Eingang abgeklemmt)")
     llm = getattr(p, "llm", None)
     if llm:
         _set_widget(clip, 0, llm)
     s, _m = _seed_value(p.seed)
     _set_widget(seedn, 0, s)
-    _set_widget(gen, 6, str(p.max_length))
+    _set_widget(gen, 1, str(p.max_length))
     info["sampling"] = {"max_length": p.max_length, "seed": s}
 
 
@@ -266,31 +278,37 @@ def _patch_4step(wf, p, info):
     _set_widget(noise, 0, s); _set_widget(noise, 1, mode_str)
     if p.prefix:
         _set_widget(save, 0, p.prefix)
-    if p.turbo_kind == "rapid4":
-        _ensure_rapid_adapter(wf, unloader, info)
-        steps = 4
+    kind = p.turbo_kind
+    if kind == "rapid4" and not _ensure_rapid_adapter(wf, unloader, info):
+        kind = "dmd8"
+    steps = p.steps or (4 if kind == "rapid4" else
+                        8 if kind == "dmd8" else BASE_SAMPLING["steps"])
+    if kind == "rapid4":
+        adapter = next(n for n in wf["nodes"] if n["type"] == "RapidMOSSAdapter")
+        _set_widget(adapter, 1, str(steps))
+        sampler = "euler"
         _set_widget(_node(wf, 14), 0, "euler")            # BasicKSamplerProvider
     else:
         _remove_rapid_adapter(wf, info)
-        steps = 8 if p.turbo_kind == "dmd8" else (p.steps or BASE_SAMPLING["steps"])
         _set_widget(turbo, 1, str(p.lora_strength))
-        turbo["mode"] = 0 if p.turbo_kind == "dmd8" else 4
-        _set_widget(_node(wf, 14), 0, p.sampler or "euler_a")
-    _set_widget(sched, 1, str(steps if p.steps is None and p.turbo_kind in ("rapid4", "dmd8")
-                              else (p.steps or steps)))
+        turbo["mode"] = 0 if kind == "dmd8" else 4
+        sampler = p.sampler or "euler_a"
+        _set_widget(_node(wf, 14), 0, sampler)
+    _set_widget(sched, 1, str(steps))
     _set_widget(sched, 2, "1.0")
     if p.scheduler:
         _set_widget(sched, 0, p.scheduler)
-    info["sampling"] = {"steps": steps, "cfg": 1.0, "sampler": "guider ohne CFG",
-                        "scheduler": p.scheduler or "simple", "seed": s}
+    info["turbo_kind"] = kind
+    info["sampling"] = {"steps": steps, "cfg": 1.0, "sampler": sampler,
+                        "scheduler": sched["widgets_values"][0], "seed": s}
 
 
-def _ensure_rapid_adapter(wf, unloader, info):
+def _ensure_rapid_adapter(wf, unloader, info) -> bool:
     """RapidMOSSAdapter (aus _dev/MOSS-upstream/moss4StepWorkflow_v10.json) einsetzen."""
     existing = next((n for n in wf["nodes"] if n["type"] == "RapidMOSSAdapter"), None)
     if existing:
         _set_widget(existing, 1, "4")
-        return
+        return _rewire_rapid(wf, existing, info)
     up = C.ROOT / "_dev" / "MOSS-upstream" / "moss4StepWorkflow_v10.json"
     src = None
     if up.is_file():
@@ -298,9 +316,8 @@ def _ensure_rapid_adapter(wf, unloader, info):
         src = next((n for n in upd["nodes"] if n["type"] == "RapidMOSSAdapter"), None)
     if src is None:
         info["warnings"].append("rapid4: RapidMOSSAdapter-Vorlage nicht gefunden - "
-                                "es bleibt der DMD-Weg (8 Steps)")
-        _set_widget(unloader, 0, unloader["widgets_values"][0])
-        return
+                                "Fallback auf dmd8")
+        return False
     import copy as _copy
     node = _copy.deepcopy(src)
     node["id"] = max(n["id"] for n in wf["nodes"]) + 1
@@ -311,10 +328,13 @@ def _ensure_rapid_adapter(wf, unloader, info):
         {"name": "sigmas", "type": "SIGMAS", "links": []},
     ]
     wf["nodes"].append(node)
-    _rewire_rapid(wf, node, info)
+    if not _rewire_rapid(wf, node, info):
+        wf["nodes"].remove(node)
+        return False
+    return True
 
 
-def _rewire_rapid(wf, adapter, info):
+def _rewire_rapid(wf, adapter, info) -> bool:
     """UNET -> Adapter -> (Guider/Sampler/Scheduler); Basic*-Zweige abklemmen."""
     nodes = B.byid(wf)
     links = {l[0]: l for l in wf.get("links", [])}
@@ -322,9 +342,11 @@ def _rewire_rapid(wf, adapter, info):
     sampler_node = next((n for n in wf["nodes"] if n["type"] == "SamplerCustomAdvanced"), None)
     provider = next((n for n in wf["nodes"] if n["type"] == "BasicKSamplerProvider"), None)
     sched = next((n for n in wf["nodes"] if n["type"] == "BasicScheduler"), None)
-    if guider is None or sampler_node is None:
-        info["warnings"].append("rapid4: Umpfadung fehlgeschlagen (Guider/Sampler nicht gefunden)")
-        return
+    un_loader = next((n for n in wf["nodes"] if n["type"] == "MOSSImageUNETLoader"), None)
+    if guider is None or sampler_node is None or un_loader is None:
+        info["warnings"].append("rapid4: Umpfadung fehlgeschlagen "
+                                "(UNET/Guider/Sampler nicht gefunden) - Fallback auf dmd8")
+        return False
     next_lid = max([int(k) for k in links] or [0]) + 1
 
     def new_link(src_id: int, slot: int, dst_id: int, dst_slot: int, dtype: str) -> int:
@@ -332,78 +354,60 @@ def _rewire_rapid(wf, adapter, info):
         nonlocal next_lid
         lid = next_lid
         next_lid += 1
-        wf["links"].append([lid, src_id, slot, dst_id, dst_slot, dtype])
         sn = nodes[str(src_id)]
-        for o in sn.get("outputs", []):
-            if o.get("index") == slot or (sn["outputs"].index(o) == slot):
-                if o.get("links") is None:
-                    o["links"] = []
-                if lid not in o["links"]:
-                    o["links"].append(lid)
         dn = nodes[str(dst_id)]
-        for i in dn.get("inputs", []):
-            if i.get("index", dn["inputs"].index(i)) == dst_slot or True:
-                if i.get("link") is not None:
-                    old = i["link"]
-                    i["link"] = lid
-                    _clear_src_link(wf, old)
-                    return lid
-        dn.setdefault("inputs", []).append({"name": dtype.lower(), "type": dtype, "link": lid})
+        inputs = dn.setdefault("inputs", [])
+        if dst_slot < len(inputs):
+            inp = inputs[dst_slot]
+            if inp.get("link") is not None:
+                _remove_link(wf, inp["link"])
+        elif dst_slot == len(inputs):
+            inp = {"name": dtype.lower(), "type": dtype, "link": None}
+            inputs.append(inp)
+        else:
+            raise MossError(f"Input-Slot {dst_slot} fehlt in Node {dst_id}")
+        inp["link"] = lid
+        output = sn["outputs"][slot]
+        if output.get("links") is None:
+            output["links"] = []
+        output["links"].append(lid)
+        wf["links"].append([lid, src_id, slot, dst_id, dst_slot, dtype])
         return lid
 
-    def _clear_src_link(wf, lid):
-        """Link aus dem Workflow und den Ausgangsreferenzen seiner Quelle entfernen."""
-        for l in wf["links"]:
-            if l[0] == lid:
-                sn = nodes.get(str(l[1]))
-                if sn:
-                    for o in sn.get("outputs", []):
-                        if isinstance(o.get("links"), list) and lid in o["links"]:
-                            o["links"].remove(lid)
-        wf["links"] = [l for l in wf["links"] if l[0] != lid]
-
-    un_loader = next((n for n in wf["nodes"] if n["type"] == "MOSSImageUNETLoader"), None)
-    if un_loader:
-        for l in wf["links"]:
-            if l[1] == un_loader["id"]:
-                _clear_src_link(wf, l[0])
-        # UNET -> Adapter(model)
-        for i in adapter.get("inputs", []):
-            if i.get("name") == "model":
-                lid = new_link(un_loader["id"], 0, adapter["id"], 0, "MODEL")
-                i["link"] = lid
+    for l in list(wf["links"]):
+        if l[1] == un_loader["id"]:
+            _remove_link(wf, l[0])
+    # UNET -> Adapter(model)
+    new_link(un_loader["id"], 0, adapter["id"], 0, "MODEL")
     # Adapter -> Guider.model (slot 0)
-    for i in guider.get("inputs", []):
+    for dst_slot, i in enumerate(guider.get("inputs", [])):
         if i.get("name") == "model":
-            lid = new_link(adapter["id"], 0, guider["id"], 0, "MODEL")
-            i["link"] = lid
+            new_link(adapter["id"], 0, guider["id"], dst_slot, "MODEL")
     # Adapter -> SamplerCustomAdvanced.sampler/.sigmas
-    for i in sampler_node.get("inputs", []):
+    for dst_slot, i in enumerate(sampler_node.get("inputs", [])):
         if i.get("name") == "sampler":
-            lid = new_link(adapter["id"], 1, sampler_node["id"], 2, "SAMPLER")
-            i["link"] = lid
+            new_link(adapter["id"], 1, sampler_node["id"], dst_slot, "SAMPLER")
         if i.get("name") == "sigmas":
-            lid = new_link(adapter["id"], 2, sampler_node["id"], 3, "SIGMAS")
-            i["link"] = lid
+            new_link(adapter["id"], 2, sampler_node["id"], dst_slot, "SIGMAS")
     # BasicKSamplerProvider / BasicScheduler / Turbo-LoRA abklemmen (mode 4)
     for n in (provider, sched):
         if n:
             n["mode"] = 4
             for i in n.get("inputs", []):
                 if i.get("link") is not None:
-                    _clear_src_link(wf, i["link"])
-                    i["link"] = None
+                    _remove_link(wf, i["link"])
     turbo = next((n for n in wf["nodes"] if n.get("title", "").startswith("Turbo LoRA")), None)
     if turbo:
         turbo["mode"] = 4
-        for l in wf["links"]:
+        for l in list(wf["links"]):
             if l[1] == turbo["id"]:
-                _clear_src_link(wf, l[0])
+                _remove_link(wf, l[0])
         for i in turbo.get("inputs", []):
             if i.get("link") is not None:
-                _clear_src_link(wf, i["link"])
-                i["link"] = None
-    info["notes"].append("rapid4: RapidMOSSAdapter 'rapid-moss-4step' eingesetzt (4 Steps, ohne CFG)")
+                _remove_link(wf, i["link"])
+    adapter["mode"] = 0
+    info["notes"].append("rapid4: RapidMOSSAdapter 'rapid-moss-4step' eingesetzt (ohne CFG)")
+    return True
 
 
 def _remove_rapid_adapter(wf, info):
@@ -419,17 +423,56 @@ PATCHERS = {"moss-t2i": _patch_t2i, "moss-inpaint": _patch_inpaint,
              "moss-4step": _patch_4step}
 
 
-def _drop_link(node, out_name):
+def _remove_link(wf, lid):
+    """Link aus dem Workflow sowie allen Ein- und Ausgangsreferenzen entfernen."""
+    wf["links"] = [link for link in wf.get("links", []) if link[0] != lid]
+    for node in wf["nodes"]:
+        for inp in node.get("inputs", []):
+            if inp.get("link") == lid:
+                inp["link"] = None
+        for output in node.get("outputs", []):
+            if isinstance(output.get("links"), list):
+                output["links"] = [link for link in output["links"] if link != lid]
+
+
+def _drop_link(wf, node, out_name):
     """Ausgang eines Knotens abklemmen (Link loeschen, Verbraucher verlieren ihn)."""
     for o in node.get("outputs", []):
         if o.get("name") == out_name and o.get("links"):
-            for _lid in list(o["links"]):
-                pass
-            o["links"] = []
+            for lid in list(o["links"]):
+                _remove_link(wf, lid)
 
 
 # ───────────────────────────── Parameter ─────────────────────────────
 
-@dataclass_ok
+@dataclass
 class MossParams:
-    pass
+    mode: str
+    prompt: str
+    negative: str = ""
+    width: int | None = None
+    height: int | None = None
+    steps: int | None = None
+    cfg: float | None = None
+    seed: int = -1
+    sampler: str | None = None
+    scheduler: str | None = None
+    turbo_kind: str | None = None
+    lora_strength: float = 1.0
+    loras: list = field(default_factory=list)       # [(name, strength)]
+    images: list = field(default_factory=list)
+    faces: int = 1
+    seedvr2: bool = False
+    system_prompt: str = ""
+    llm: str | None = None
+    max_length: int = 4096
+    prefix: str | None = None
+
+
+def build(p: MossParams) -> tuple[dict, dict]:
+    """Modus-Vorlage patchen und (API-Graph, Informationen) liefern."""
+    wf = load_template(p.mode)
+    p = replace(p, turbo_kind=p.turbo_kind or DEFAULT_TURBO[p.mode])
+    info = {"notes": [], "warnings": [], "turbo_kind": p.turbo_kind}
+    PATCHERS[p.mode](wf, p, info)
+    return B.ui_to_api(wf), info
