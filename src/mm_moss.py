@@ -85,10 +85,12 @@ def template_path(mode: str) -> Path:
 
 
 def load_template(mode: str) -> dict:
+    """Die zum Modus gehoerende Workflow-Vorlage als JSON laden."""
     return json.loads(C.read_text(template_path(mode)))
 
 
 def _node(wf: dict, node_id: int) -> dict:
+    """Knoten anhand seiner ID liefern oder bei Fehlen MossError ausloesen."""
     n = next((x for x in wf["nodes"] if x["id"] == node_id), None)
     if n is None:
         raise MossError(f"Node {node_id} fehlt in der Vorlage ({wf.get('_file')})")
@@ -96,6 +98,7 @@ def _node(wf: dict, node_id: int) -> dict:
 
 
 def _set_widget(node: dict, index: int, value) -> None:
+    """Widgetwert ersetzen; bei fehlender Liste oder Position MossError ausloesen."""
     wv = node.get("widgets_values")
     if not isinstance(wv, list) or index >= len(wv):
         raise MossError(f"Widget #{index} nicht vorhanden in Node {node['id']} "
@@ -104,6 +107,7 @@ def _set_widget(node: dict, index: int, value) -> None:
 
 
 def _seed_value(seed) -> tuple[str, str]:
+    """Seed als Text mit Modus 'fixed' liefern; negative/ungueltige Seeds auslosen."""
     try:
         s = int(seed)
     except (TypeError, ValueError):
@@ -124,6 +128,7 @@ def _apply_lanpaint_patch(node: dict, on: bool) -> None:
 # ───────────────────────────── Pattern pro Modus ─────────────────────────────
 
 def _patch_t2i(wf, p, info):
+    """T2I-Vorlage mit Prompt, Groesse und Sampling patchen und in info protokollieren."""
     ks = _node(wf, 4)                      # KSampler
     latent = _node(wf, 126)                # EmptyFlux2LatentImage
     pos = _node(wf, 28)                    # Prompt (LoraManager)
@@ -155,6 +160,7 @@ def _patch_t2i(wf, p, info):
 
 
 def _patch_inpaint(wf, p, info):
+    """Inpaint-Vorlage mit Pflichtbild, Prompts, LoRAs und Sampling patchen."""
     img = _node(wf, 1)                     # LoadImage
     ks = _node(wf, 38)                     # LanPaint_KSampler
     pos = _node(wf, 29)                    # Prompt (LoraManager)
@@ -182,6 +188,7 @@ def _patch_inpaint(wf, p, info):
 
 
 def _patch_detailer(wf, p, info):
+    """Detailer mit Pflichtbild, Gesichtsauswahl und Sampling konfigurieren."""
     img = _node(wf, 15)                    # LoadImage
     picker = _node(wf, 180)                # ImpactSEGSPicker (Face 1)
     det = _node(wf, 39)                    # DetailerForEachDebugPipe (Face 1)
@@ -217,6 +224,7 @@ def _patch_detailer(wf, p, info):
 
 
 def _patch_enhance(wf, p, info):
+    """Enhancer-Vorlage mit Prompts, optionalem Bild und LLM-Parametern patchen."""
     gen = _node(wf, 3)                     # TextGenerate
     cat = _node(wf, 9)                     # StringConcatenate (System-Prompt)
     user = _node(wf, 16)                   # easy prompt (Benutzereingabe)
@@ -242,6 +250,7 @@ def _patch_enhance(wf, p, info):
 
 
 def _patch_4step(wf, p, info):
+    """4-Step-Vorlage fuer RapidMOSS, DMD oder Basissampling konfigurieren."""
     pos = _node(wf, 3)                     # CLIPTextEncode
     noise = _node(wf, 5)                   # RandomNoise
     latent = _node(wf, 6)                  # EmptyFlux2LatentImage
@@ -319,6 +328,7 @@ def _rewire_rapid(wf, adapter, info):
     next_lid = max([int(k) for k in links] or [0]) + 1
 
     def new_link(src_id: int, slot: int, dst_id: int, dst_slot: int, dtype: str) -> int:
+        """Workflow-Link anlegen, Knotenreferenzen aktualisieren und Link-ID liefern."""
         nonlocal next_lid
         lid = next_lid
         next_lid += 1
@@ -342,6 +352,7 @@ def _rewire_rapid(wf, adapter, info):
         return lid
 
     def _clear_src_link(wf, lid):
+        """Link aus dem Workflow und den Ausgangsreferenzen seiner Quelle entfernen."""
         for l in wf["links"]:
             if l[0] == lid:
                 sn = nodes.get(str(l[1]))
@@ -396,6 +407,7 @@ def _rewire_rapid(wf, adapter, info):
 
 
 def _remove_rapid_adapter(wf, info):
+    """Vorhandenen RapidMOSSAdapter deaktivieren und dies in info vermerken."""
     n = next((x for x in wf["nodes"] if x["type"] == "RapidMOSSAdapter"), None)
     if n:
         n["mode"] = 4

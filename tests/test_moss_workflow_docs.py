@@ -19,18 +19,21 @@ NOTE_IDS = (60, 65)
 class ReadmeOfflineDocsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        """Load the README blockquotes containing the local usage notice."""
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         cls.local_notice = "\n".join(
             line for line in readme.splitlines() if line.startswith(">")
         )
 
     def test_local_notice_explains_offline_use_without_account_or_credits(self):
+        """Require the README notice to describe offline use of local models."""
         self.assertIn("аккаунт и кредиты не нужны", self.local_notice)
         self.assertIn("без интернета", self.local_notice)
         self.assertIn("ComfyUI", self.local_notice)
         self.assertIn("safetensors", self.local_notice)
 
     def test_local_notice_identifies_the_unrelated_cloud_login_error(self):
+        """Require the notice to identify the unrelated cloud service login error."""
         for label in ("OpenCreator-Konto", "Anmeldedienst ist nicht verfügbar", "Credits"):
             with self.subTest(label=label):
                 self.assertIn(label, self.local_notice)
@@ -41,6 +44,7 @@ class ReadmeOfflineDocsTest(unittest.TestCase):
 class MossWorkflowOfflineDocsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        """Load the shipped workflow and index its nodes by ID."""
         cls.workflow = json.loads(WORKFLOW.read_text(encoding="utf-8"))
         cls.nodes = {node["id"]: node for node in cls.workflow["nodes"]}
 
@@ -52,6 +56,7 @@ class MossWorkflowOfflineDocsTest(unittest.TestCase):
             yield node_id, "named", node["widgets_values_named"]["text"]
 
     def test_both_notes_keep_positional_and_named_text_in_sync(self):
+        """Require both widget formats to store the same single note text."""
         # A stale named value can restore the old note on workflow import.
         for node_id in NOTE_IDS:
             with self.subTest(node_id=node_id):
@@ -63,12 +68,14 @@ class MossWorkflowOfflineDocsTest(unittest.TestCase):
                 )
 
     def test_each_note_explains_offline_use_without_account_or_credits(self):
+        """Require offline, account-free and credit-free guidance in each note format."""
         for node_id, representation, text in self.note_texts():
             with self.subTest(node_id=node_id, representation=representation):
                 for claim in ("local", "offline", "no account", "no credits"):
                     self.assertIn(claim, text.casefold())
 
     def test_each_note_identifies_the_unrelated_cloud_service(self):
+        """Require each note format to distinguish the unrelated cloud service."""
         for node_id, representation, text in self.note_texts():
             with self.subTest(node_id=node_id, representation=representation):
                 for label in ("OpenCreator-Konto", "Credits", "third-party cloud service"):
@@ -78,6 +85,7 @@ class MossWorkflowOfflineDocsTest(unittest.TestCase):
                 )
 
     def test_model_paths_survive_json_escaping_as_windows_paths(self):
+        """Check that model and LoRA paths retain their Windows path meaning."""
         expected_root = PureWindowsPath(r"D:\ComfyUiCuda\models")
         expected_lora = PureWindowsPath(r"MOSS\MOSS-Image-SFT-8-steps-dmd.safetensors")
         for node_id, representation, text in self.note_texts():
@@ -91,6 +99,7 @@ class MossWorkflowOfflineDocsTest(unittest.TestCase):
                 self.assertIn(expected_lora, paths)
 
     def test_offline_guidance_stays_in_disconnected_documentation_nodes(self):
+        """Require guidance nodes to remain Markdown notes without graph connections."""
         for node_id in NOTE_IDS:
             with self.subTest(node_id=node_id):
                 node = self.nodes[node_id]
