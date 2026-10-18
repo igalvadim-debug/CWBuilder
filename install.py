@@ -729,7 +729,9 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
 
     # Позиционный интерпретатор — первое значение argv, не являющееся опцией
     # или её аргументом (значение --python и имена после --download-models
-    # позиционными не считаются).
+    # позиционными не считаются). Любая последующая опция завершает блок имён
+    # --download-models (dl_seen сбрасывается), поэтому интерпретатор,
+    # указанный после другой опции, не принимается за имя модели.
     positional = ""
     skip_next = False
     dl_seen = False
@@ -739,14 +741,16 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
             continue
         if a == "--python":
             skip_next = True
+            dl_seen = False
             continue
         if a == "--download-models":
             dl_seen = True
             continue
         if a.startswith("-"):
+            dl_seen = False
             continue
         if dl_seen:
-            # значения после --download-models — это имена моделей
+            # значения сразу после --download-models — это имена моделей
             break
         positional = a
         break
