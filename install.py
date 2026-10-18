@@ -47,7 +47,89 @@ INSTALL_COMPLETE = VENV_DIR / ".install-complete"
 ENV_FILE = ROOT / ".env"
 
 # Интерпретатор по умолчанию (можно переопределить аргументом --python).
-DEFAULT_PYTHON = sys.executable
+# Если venv ещё нет, install.py сам создаёт его командой:
+#   "<этот python>" -m venv venv
+# Приоритет поиска: --python <exe> > MM_PYTHON > известный локальный Python312
+# > sys.executable (тот, которым запущен сам install.py).
+KNOWN_LOCAL_PYTHONS = [
+    r"C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe",
+]
+
+
+def default_python() -> str:
+    """Base interpreter for creating the venv (see KNOWN_LOCAL_PYTHONS above).
+
+    MM_PYTHON принимается только если это рабочий Python >= 3.12; более
+    старая версия не «съедает» дальнейший поиск (py-лаунчер и т.д.).
+    """
+    mm_python = os.environ.get("MM_PYTHON", "").strip('"').strip()
+    if mm_python and is_supported_python(mm_python):
+        return mm_python
+    localappdata = os.environ.get("LOCALAPPDATA", "")
+    candidates = [Path(localappdata) / "Programs" / "Python" / "Python312" / "python.exe"] if localappdata else []
+    candidates += [Path(p) for p in KNOWN_LOCAL_PYTHONS]
+    for cand in candidates:
+        if cand.is_file():
+            return str(cand)
+    return sys.executable
+
+
+DEFAULT_PYTHON = None  # устаревшее имя; base_python вычисляется default_python() в parse_args()
+
+
+def is_supported_python(exe: str) -> bool:
+    """True, если exe — рабочий Python версии >= 3.12 (0 байт сети)."""
+    if not exe or not Path(exe).is_file():
+        return False
+    try:
+        rc = subprocess.call(
+            [exe, "-c", "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)"],
+            cwd=str(ROOT),
+        )
+    except OSError:
+        return False
+    return rc == 0
+
+
+def py_launcher_versions() -> list[str]:
+    """Версии Python, доступные через py-лаунчер ([] если лаунчера нет)."""
+    try:
+        out = subprocess.run(["py", "-0p"], capture_output=True, text=True, cwd=str(ROOT))
+    except OSError:
+        return []
+    if out.returncode != 0:
+        return []
+    versions: list[str] = []
+    for line in (out.stdout + out.stderr).splitlines():
+        line = line.strip()
+        if not line.startswith("-"):
+            continue
+        token = line.split()[0].lstrip("-")
+        parts = token.split(".")
+        if len(parts) >= 2 and all(p.isdigit() for p in parts[:2]):
+            v = f"{parts[0]}.{parts[1]}"
+            if v not in versions:
+                versions.append(v)
+    return versions
+
+
+def find_py_with_supported_python() -> str | None:
+    """Первая версия py-лаунчера с Python >= 3.12 (новые версии вперёд)."""
+    def key(v: str) -> tuple[int, int]:
+        a, b = v.split(".")
+        return (int(a), int(b))
+    for v in sorted(py_launcher_versions(), key=key, reverse=True):
+        try:
+            rc = subprocess.call(
+                ["py", f"-{v}", "-c",
+                 "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)"],
+                cwd=str(ROOT),
+            )
+        except OSError:
+            return None
+        if rc == 0:
+            return v
+    return None
 
 # Кэш найденных путей записей реестра: id(entry) -> Path | None (заполняет prepare_models).
 RESOLVED_PATHS: dict[int, Path | None] = {}
@@ -93,7 +175,20 @@ def ensure_venv(base_python: str) -> Path:
             f"[fail] Python не найден: {base_python}\n"
             f"       Укажите свой: python install.py --python <путь к python.exe>"
         )
-    print(f"[setup] Создаю venv: {VENV_DIR} (из {base_python})")
+    # Проверка версии: requirements (gradio) и код src/ рассчитаны на 3.12+.
+    rc = subprocess.call(
+        [base_python, "-c", "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)"],
+        cwd=str(ROOT),
+    )
+    ver = subprocess.run([base_python, "--version"], capture_output=True, text=True)
+    found_ver = (ver.stdout + ver.stderr).strip()
+    if rc != 0:
+        raise SystemExit(
+            f"[fail] {base_python} ({found_ver}) ниже 3.12 — не поддерживается.\n"
+            f"       Запустите явно: \"C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" install.py\n"
+            f"       или укажите свой: python install.py --python <путь к python.exe>"
+        )
+    print(f"[setup] Создаю venv: {VENV_DIR} из: \"{base_python}\" -m venv venv ({found_ver})")
     subprocess.check_call(
         [base_python, "-m", "venv", str(VENV_DIR)], cwd=str(ROOT)
     )
@@ -453,10 +548,12 @@ if not exist "venv\\Scripts\\python.exe" goto install
 if not exist "venv\\.install-complete" goto install
 
 :start
-rem Интерпретатор для запуска стека: MM_PYTHON (например, ваш Python 3.12 вне
-rem PATH), затем venv\\Scripts\\python.exe (он же активируется ниже).
+rem Интерпретатор для запуска стека: venv\\Scripts\\python.exe (он же активируется
+rem ниже); MM_PYTHON — только если это рабочий Python 3.12+ (старый не используем).
 set "PYEXE=venv\\Scripts\\python.exe"
-if defined MM_PYTHON if exist "%MM_PYTHON%" set "PYEXE=%MM_PYTHON%"
+if defined MM_PYTHON if exist "%MM_PYTHON%" (
+    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1 && set "PYEXE=%MM_PYTHON%"
+)
 
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
@@ -484,9 +581,14 @@ rem Установка не завершена — запускаем install.py
 echo Установка не завершена — запускаю установку...
 set "INSTALL_OK="
 if defined MM_PYTHON if exist "%MM_PYTHON%" (
-    "%MM_PYTHON%" install.py %*
-    set "INSTALL_OK=1"
-    goto install_after
+    rem MM_PYTHON принимаем только если это Python 3.12+; иначе идём дальше
+    rem по цепочке поиска (venv, известный локальный Python312, py-лаунчер).
+    "%MM_PYTHON%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
+    if not errorlevel 1 (
+        "%MM_PYTHON%" install.py %*
+        set "INSTALL_OK=1"
+        goto install_after
+    )
 )
 if exist "venv\\Scripts\\python.exe" (
     rem Уже созданный venv имеет приоритет — ставим зависимости в него.
@@ -496,6 +598,11 @@ if exist "venv\\Scripts\\python.exe" (
 )
 if exist "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" (
     "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" install.py %*
+    set "INSTALL_OK=1"
+    goto install_after
+)
+if exist "C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" (
+    "C:\\Users\\Startklar\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" install.py %*
     set "INSTALL_OK=1"
     goto install_after
 )
@@ -593,10 +700,7 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
     """
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-    base_python = DEFAULT_PYTHON
-    mm_python = os.environ.get("MM_PYTHON", "").strip('"').strip()
-    if mm_python and Path(mm_python).exists():
-        base_python = mm_python
+    base_python = default_python()
     copy_models = "--copy-models" in argv
     download_names: list[str] = []
     dl_enabled = "--download-models" in argv
@@ -608,12 +712,27 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool]:
             download_names.append(a)
     # Флаг задан, но имён нет — качаем все недостающие обязательные модели.
     download_all = dl_enabled and not download_names
+    explicit_base = False
     if "--python" in argv:
         i = argv.index("--python")
         if i + 1 < len(argv):
             base_python = argv[i + 1]
+            explicit_base = True
     elif argv and not argv[0].startswith("-"):
         base_python = argv[0]
+        explicit_base = True
+    # Явно указанный интерпретатор (CLI/MM_PYTHON/sys.executable) может быть
+    # старше 3.12 — не блокируем установку: если venv ещё нет, отдаём поиск
+    # py-лаунчеру, который подберёт совместимую версию (ensure_venv всё
+    # равно проверяет версию перед созданием venv).
+    if not explicit_base and (VENV_DIR / "Scripts" / "python.exe").exists():
+        pass  # существующий venv имеет приоритет — ничего менять не нужно
+    elif not is_supported_python(base_python):
+        py_ver = find_py_with_supported_python()
+        if py_ver:
+            print(f"[i    ] Интерпретатор {base_python!r} ниже 3.12 — "
+                  f"venv создам через py -{py_ver}")
+            base_python = py_ver
     return base_python, copy_models, download_names, download_all
 
 
@@ -685,6 +804,10 @@ def main(argv: list[str]) -> int:
     common_dir = models_home_for(resolved, reg)
     if common_dir is not None:
         models_home = common_dir
+    elif not resolved:
+        # Пустой список разрешённых моделей: общую папку выбрать нельзя —
+        # не пишем домысленный LOCAL_STACK_MODELS (write_env опустит ключ).
+        models_home = None
     else:
         homes = {str(p.parent) for _e, p in resolved}
         if len(homes) == 1:
@@ -709,6 +832,8 @@ def main(argv: list[str]) -> int:
         print("[warn] Веб-интерфейс не установлен (нужен Node.js + pnpm);"
               " Python-стек готов, повторите позже: corepack enable && pnpm install")
     write_start_bat()
+    INSTALL_COMPLETE.parent.mkdir(parents=True, exist_ok=True)
+    INSTALL_COMPLETE.touch()
     print("=== Готово. Запуск: start.bat (стек + веб-интерфейс :19861). "
           "Модели подключены с диска, 0 байт скачано. ===")
     return 0
@@ -768,4 +893,17 @@ def _test_mode() -> int:
 if __name__ == "__main__":
     if "--self-test" in sys.argv[1:]:
         raise SystemExit(_test_mode())
-    raise SystemExit(main(sys.argv[1:]))
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except SystemExit as e:
+        # Все аварийные выходы (SystemExit) — через этот блок, чтобы окно
+        # install.bat/start.bat не закрывалось мгновенно и было видно причину.
+        code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+        if code != 0:
+            print()
+            print("[fail] Установка не завершена. См. сообщения выше.")
+            try:
+                input("Нажмите Enter для выхода...")
+            except EOFError:
+                pass
+        raise SystemExit(code)

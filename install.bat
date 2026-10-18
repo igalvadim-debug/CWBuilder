@@ -27,8 +27,15 @@ if exist "venv\Scripts\python.exe" (
 )
 
 rem Известная локальная установка Python 3.12 (проверяется первой — поиск в PATH не нужен).
+rem Это ваш интерпретатор: install.py создаст из него venv командой
+rem   "C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe" -m venv venv
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
     set "PYPATH=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    set "PYARGS="
+    goto run
+)
+if exist "C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe" (
+    set "PYPATH=C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe"
     set "PYARGS="
     goto run
 )
