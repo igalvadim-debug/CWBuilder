@@ -360,6 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
     i.set_defaults(fn=cmd_image)
 
     def _cmd_ui(a) -> int:
+        """Launch the local Gradio UI and return 0 after it exits normally."""
         import mm_ui
         mm_ui.main()
         return 0

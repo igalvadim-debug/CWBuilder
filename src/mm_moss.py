@@ -68,7 +68,11 @@ class MossError(Exception):
 
 
 def template_path(mode: str) -> Path:
-    """Vorlagendatei: assets/MOSS Image, sonst output/MOSS-with-my-models."""
+    """Find a mode's template in assets/MOSS Image or output/MOSS-with-my-models.
+
+    Prefer the exact ' — my models.json' fallback over the first matching
+    filename prefix. Raise MossError for an unknown mode or missing template.
+    """
     if mode not in TEMPLATE_FILES:
         raise MossError(f"Unbekannter MOSS-Modus '{mode}'. Moeglich: {', '.join(MODES)}")
     name = TEMPLATE_FILES[mode]
@@ -86,7 +90,11 @@ def template_path(mode: str) -> Path:
 
 
 def load_template(mode: str) -> dict:
-    """Die zum Modus gehoerende Workflow-Vorlage als JSON laden."""
+    """Read and decode the UI workflow template selected for mode.
+
+    Propagate MossError from template lookup, OSError from reading the file,
+    UnicodeDecodeError from text decoding, and JSONDecodeError for invalid JSON.
+    """
     return json.loads(C.read_text(template_path(mode)))
 
 
@@ -173,7 +181,11 @@ def _patch_t2i(wf, p, info):
 
 
 def _patch_inpaint(wf, p, info):
-    """Inpaint-Vorlage mit Pflichtbild, Prompts, LoRAs und Sampling patchen."""
+    """Patch the inpaint workflow and sampling info in place.
+
+    Use the first image name already available to ComfyUI; its LoadImage node
+    supplies the mask. Raise MossError for no image or missing nodes/widgets.
+    """
     img = _node(wf, 1)                     # LoadImage
     ks = _node(wf, 38)                     # LanPaint_KSampler
     pos = _node(wf, 29)                    # Prompt (LoraManager)
@@ -201,7 +213,13 @@ def _patch_inpaint(wf, p, info):
 
 
 def _patch_detailer(wf, p, info):
-    """Detailer mit Pflichtbild, Gesichtsauswahl und Sampling konfigurieren."""
+    """Patch the first detailer branch and sampling info in place.
+
+    Use the first ComfyUI image name and clamp the face count to 1 through 4.
+    An empty negative prompt preserves the template's value. seedvr2 adds a
+    warning without enabling upscaling. Raise MossError for no image or missing
+    nodes/widgets; face-count conversion errors propagate.
+    """
     img = _node(wf, 15)                    # LoadImage
     picker = _node(wf, 180)                # ImpactSEGSPicker (Face 1)
     det = _node(wf, 39)                    # DetailerForEachDebugPipe (Face 1)
@@ -237,7 +255,12 @@ def _patch_detailer(wf, p, info):
 
 
 def _patch_enhance(wf, p, info):
-    """Enhancer-Vorlage mit Prompts, optionalem Bild und LLM-Parametern patchen."""
+    """Patch enhancer prompts, LLM settings, and sampling info in place.
+
+    Use the default system prompt when empty, and the first image when given;
+    otherwise disconnect the image output. Raise MossError for missing
+    nodes/widgets.
+    """
     gen = _node(wf, 3)                     # TextGenerate
     cat = _node(wf, 9)                     # StringConcatenate (System-Prompt)
     user = _node(wf, 16)                   # easy prompt (Benutzereingabe)
@@ -262,7 +285,15 @@ def _patch_enhance(wf, p, info):
 
 
 def _patch_4step(wf, p, info):
-    """4-Step-Vorlage fuer RapidMOSS, DMD oder Basissampling konfigurieren."""
+    """Patch the 4-step workflow and record its effective sampling in info.
+
+    Fall back from rapid4 to dmd8 when adapter setup returns False. Unless
+    steps is truthy, use 4 steps for rapid4, 8 for dmd8, or 30 otherwise.
+    Rapid sampling forces euler; record cfg as 1.0. Update dimensions in pixels
+    only when both are truthy. Raise MossError for missing nodes/widgets;
+    adapter template read/decoding errors and dimension conversion errors
+    propagate.
+    """
     pos = _node(wf, 3)                     # CLIPTextEncode
     noise = _node(wf, 5)                   # RandomNoise
     latent = _node(wf, 6)                  # EmptyFlux2LatentImage
@@ -304,7 +335,14 @@ def _patch_4step(wf, p, info):
 
 
 def _ensure_rapid_adapter(wf, unloader, info) -> bool:
-    """RapidMOSSAdapter (aus _dev/MOSS-upstream/moss4StepWorkflow_v10.json) einsetzen."""
+    """Reuse or copy the upstream RapidMOSSAdapter and rewire wf in place.
+
+    Copy from _dev/MOSS-upstream/moss4StepWorkflow_v10.json when absent.
+    Return True on successful rewiring. Record a warning and return False if
+    the adapter template or required routing nodes are absent; remove a newly
+    copied adapter if rewiring returns False. File, text/JSON decoding, and
+    widget errors propagate rather than triggering the fallback result.
+    """
     existing = next((n for n in wf["nodes"] if n["type"] == "RapidMOSSAdapter"), None)
     if existing:
         _set_widget(existing, 1, "4")
@@ -335,7 +373,12 @@ def _ensure_rapid_adapter(wf, unloader, info) -> bool:
 
 
 def _rewire_rapid(wf, adapter, info) -> bool:
-    """UNET -> Adapter -> (Guider/Sampler/Scheduler); Basic*-Zweige abklemmen."""
+    """Route the UNET through adapter and bypass basic sampling branches.
+
+    Update wf and info in place and return True. If the UNET loader, guider,
+    or advanced sampler is absent, add a warning and return False before
+    changing wf. Malformed graph errors propagate.
+    """
     nodes = B.byid(wf)
     links = {l[0]: l for l in wf.get("links", [])}
     guider = next((n for n in wf["nodes"] if n["type"] == "BasicGuider"), None)
@@ -470,7 +513,17 @@ class MossParams:
 
 
 def build(p: MossParams) -> tuple[dict, dict]:
-    """Modus-Vorlage patchen und (API-Graph, Informationen) liefern."""
+    """Patch a fresh mode template and return (API graph, info) without running it.
+
+    Leave p unchanged; resolve an empty turbo_kind to the mode's default.
+    info contains notes, warnings, turbo_kind, and sampling settings; rapid4
+    setup can fall back to dmd8 with a warning. Image names must already be
+    available to ComfyUI; this function does not stage them.
+
+    Raise MossError for unknown modes, unavailable templates, missing required
+    images, or missing nodes/widgets. Template I/O and text/JSON decoding
+    errors, numeric conversion errors, and malformed graph errors propagate.
+    """
     wf = load_template(p.mode)
     p = replace(p, turbo_kind=p.turbo_kind or DEFAULT_TURBO[p.mode])
     info = {"notes": [], "warnings": [], "turbo_kind": p.turbo_kind}

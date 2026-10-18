@@ -242,7 +242,11 @@ def find_local_file(cand: dict, default_roots: list[str]) -> Path | None:
 
 
 def resolve_entry(entry: dict, default_roots: list[str]) -> tuple[Path | None, Path | None]:
-    """Вернуть (путь к файлу модели, путь к mmproj) по записи реестра."""
+    """Return the first matching model and mmproj paths, or None for each.
+
+    Search mmproj_candidates only when a model was found. Each candidate's
+    root overrides default_roots.
+    """
     path = None
     for cand in entry.get("candidates", []):
         path = find_local_file(cand, default_roots)
@@ -307,14 +311,17 @@ def _download_all_missing(reg: dict) -> list[str]:
 
 
 def download_models(py: Path, names: list[str]) -> int:
-    """Докачка с Hugging Face — ТОЛЬКО по явному --download-models.
+    """Attempt Hugging Face downloads for named LLM or embedding entries.
 
-    Реестр docs/local_models.json НЕ содержит HF-репозиториев (правило:
-    ничего не придумывать), поэтому источник берётся из optional-поля
-    "download_repo" конкретной записи; если его нет — печатаем, что именно
-    искали, и просим указать repo вручную. Скачивание идёт в первый корень
-    реестра; huggingface_hub вызывается через python -m (без прямого импорта).
-    По умолчанию этот путь не выполняется вовсе (0 байт сети).
+    Use py to run huggingface_hub for entries with download_repo, placing
+    download_path (defaulting to the name) under the first registry root.
+    Create parent directories; skip unknown names and entries without a repo.
+    The caller controls opt-in and selection of missing models.
+
+    Return 1 if no destination root exists or any download process exits
+    nonzero, otherwise 0, including when all names are skipped. Registry
+    JSON errors raise SystemExit; file and process launch errors propagate
+    as OSError, and registry decoding errors as UnicodeDecodeError.
     """
     reg = load_registry()
     roots = reg.get("roots", [])
@@ -387,16 +394,16 @@ def report_models(reg: dict) -> int:
 def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool, bool]:
     """Return (base_python, check_models, download_names, download_all, selftest).
 
-    --python takes the following value (first occurrence wins);
-    --check-models only prints the local model report (no writes at all);
-    --download-models [names...] enables HF downloads for the listed files
-    (or everything missing when no names given — then download_all is True;
-    the explicit flag is never silently dropped). Positional values that do
-    not start with '-' select the base interpreter.
-    Environment fallbacks: MM_PYTHON (the variable used by start.bat to point
-    at a Python outside PATH) and PYTHONUTF8/PYTHONIOENCODING are exported to
-    all child processes so install.py and its subprocesses always run in UTF-8
-    on Windows.
+    The first --python uses its following value when present. With no --python,
+    an initial positional value selects the interpreter. Defaults come from
+    default_python(). An unsupported selection may be replaced with a
+    py-launcher version string.
+    --download-models collects names up to the next option; no names sets
+    download_all. --check-models and --self-test set their respective flags;
+    parsing does not install dependencies or download models.
+
+    Set PYTHONUTF8 and PYTHONIOENCODING defaults in the process environment,
+    preserving existing values. Interpreter discovery may launch subprocesses.
     """
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -437,13 +444,19 @@ def parse_args(argv: list[str]) -> tuple[str, bool, list[str], bool, bool]:
 
 
 def main(argv: list[str]) -> int:
-    """Prepare the venv, install dependencies, report models, write marker.
+    """Install dependencies in the local venv and optionally download models.
 
-    Models are NEVER downloaded or copied by default: they stay exactly where
-    they are (docs/models.txt lists them; ComfyUI reads them via model_roots
-    in config.json). Downloads happen only with an explicit --download-models
-    flag. Finish with the completion marker venv/.install-complete, which
-    start.bat / ui.bat check before launching.
+    --self-test returns the registry self-check result without preparing the
+    venv. Otherwise, create or reuse the venv, remove its completion marker,
+    and install requirements. --check-models then returns the local model
+    report's status without downloading models or restoring the marker.
+
+    --download-models selects named LLM/embedding entries, or missing required
+    entries when no names are given. Nonzero download statuses do not prevent
+    writing venv/.install-complete and returning 0. Without downloads, report
+    local models. Setup and registry SystemExit errors, file/process OSError,
+    UnicodeDecodeError, and venv creation subprocess.CalledProcessError propagate.
+    Self-test assertions can raise AssertionError.
     """
     base_python, check_models, download_names, download_all, selftest = parse_args(argv)
 
@@ -531,10 +544,12 @@ def _test_mode() -> int:
 
 
 def _self_check() -> int:
-    """Проверка без сети/venv: только компиляция исходников проекта.
+    """Compile install.py, src/mm.py, and src/mm_*.py, writing bytecode caches.
 
-    Вызывается из start.bat/ui.bat перед запуском (python -m install --check).
-    Возвращает число ошибок (0 = всё скомпилировалось)."""
+    Used by start.bat/ui.bat via install.py --check, without network access or
+    venv setup. Catch per-file exceptions and return the number of failed
+    compilations, or 0 when all succeed.
+    """
     import py_compile
 
     files = [ROOT / "install.py", ROOT / "src" / "mm.py"] + sorted((ROOT / "src").glob("mm_*.py"))
