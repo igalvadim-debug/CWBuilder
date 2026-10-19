@@ -565,26 +565,19 @@ def build_ui() -> gr.Blocks:
             except Exception:
                 return []
 
-        last_mode = {"m": st["mode"]}   # zuletzt angewendeter Modus ( fuer apply_mode )
-
-        def apply_mode(*a):
+        def apply_mode(m, u=None, c=None, v=None, prev=None):
             """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern.
 
-            Ruft Gradio mit weniger Argumenten auf (z. B. nur [mode]), werden
-            u/c/v als None ergaenzt; mit mehr Argumenten (signatures.update())
-            werden die zusaetzlichen ignoriert - so passt die Signatur immer.
+            'prev' ist der zuvor gewaehlte Modus als Session-State (gr.State) -
+            so erhaelt jede Sitzung korrekt ihre Modus-Defaults, ohne dass ein
+            serverweiter Zustand andere Sitzungen ueberschreibt.
             """
             import mm_images as I
-            m = a[0]
-            u, c, v = (list(a[1:]) + [None, None, None])[:3]
             vis = layout_for(m)
-            if m != prev_mode:
-                c = v = None
             save_state({"mode": m})
             # Moduswechsel: aus dem vorherigen Modus uebernommene Encoder-/VAE-
             # Auswahl ignorieren, damit der Default des neuen Modus greift.
-            mode_changed = (m != last_mode["m"])
-            last_mode["m"] = m
+            mode_changed = (m != prev)
             tgt_name = "video" if m in VIDEO_MODES else "image"
             needle_u = {"ltx25": "ltx", "minimax_h3": "minimax|h3"}.get(m)
             ch = B._changes("ltx25" if m == "ltx25" else "minimax_h3") \
