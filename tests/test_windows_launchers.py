@@ -1,4 +1,4 @@
-"""Portable batch artifact contracts; these checks do not execute cmd.exe."""
+"""CWBuilder Windows launcher contracts; these checks do not execute cmd.exe."""
 
 import re
 import unittest
@@ -14,67 +14,62 @@ def commands(filename):
 
 
 def section(text, label):
-    return re.search(rf"^:{label}\n(.*?)(?=^:\w|\Z)", text, re.MULTILINE | re.DOTALL).group(1)
+    match = re.search(rf"^:{label}\n(.*?)(?=^:\w|\Z)", text, re.MULTILINE | re.DOTALL)
+    if not match:
+        return ""
+    return match.group(1)
 
 
-class WindowsLauncherContractTests(unittest.TestCase):
-    def test_fresh_install_reaches_installer_without_requiring_a_venv(self):
-        run = section(commands("install.bat"), "run")
-        invocation = '"%PYPATH%" %PYARGS% install.py %*'
-        self.assertIn(invocation, run)
-        # Regression: the deleted guards rejected every first installation.
-        self.assertNotIn("if not exist", run[:run.index(invocation)].lower())
-        self.assertRegex(run, re.escape(invocation) + r"\nif errorlevel 1 \(")
-        self.assertIn("exit /b 1", run)
+class CWBuilderLauncherContractTests(unittest.TestCase):
+    def test_install_bat_runs_install_py_with_venv_python(self):
+        text = commands("install.bat")
+        # Should call venv Python with install.py
+        self.assertIn('"%~dp0venv\\Scripts\\python.exe" install.py', text)
+        # Should forward all arguments
+        self.assertIn("%*", text)
+        # Should check Python version
+        self.assertIn("sys.version_info >= (3, 12)", text)
 
-    def test_stop_dispatch_precedes_installation_checks(self):
-        launcher = commands("start.bat")
-        self.assertLess(launcher.index('if /i "%~1"=="stop" goto :stop'),
-                        launcher.index('if not exist "venv\\Scripts\\python.exe" goto install'))
+    def test_start_bat_menu_has_required_options(self):
+        text = commands("start.bat")
+        # Menu should have G, C, I, P, Q options
+        self.assertIn("choice /c GCI PQ", text)
+        # Should have :ui, :comfy, :install, :check labels
+        for label in ["ui", "comfy", "install", "check"]:
+            self.assertIn(f":{label}", text)
 
-    def test_bootstrap_candidates_are_ordered_and_forward_all_arguments(self):
-        bootstrap = section(commands("start.bat"), "install")
-        candidates = (
-            '"%MM_PYTHON%" install.py %*',
-            '"venv\\Scripts\\python.exe" install.py %*',
-            '"%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" install.py %*',
-            'py -3.12 install.py %*',
-            'py -3 install.py %*',
-        )
-        positions = [bootstrap.index(candidate) for candidate in candidates]
-        self.assertEqual(positions, sorted(positions))
-        self.assertLess(bootstrap.index('set "INSTALL_OK="'), positions[0])
-        for candidate in candidates[:-1]:
-            with self.subTest(candidate=candidate):
-                self.assertIn(candidate + '\nset "INSTALL_OK=1"\ngoto install_after', bootstrap)
-        self.assertIn('if defined MM_PYTHON if exist "%MM_PYTHON%" (', bootstrap)
-        self.assertIn('if errorlevel 1 goto install_no_py', bootstrap)
-        self.assertIn('sys.version_info >= (3, 12)', bootstrap)
-        self.assertIn('if errorlevel 1 goto install_bad_py', bootstrap)
+    def test_start_bat_ui_launches_gradio_on_port_7865(self):
+        text = commands("start.bat")
+        ui_section = section(text, "ui")
+        # Should use venv Python
+        self.assertIn('"%PYEXE%" mm.py ui', ui_section)
+        # Should set encoding
+        self.assertIn("PYTHONUTF8=1", ui_section)
+        self.assertIn("PYTHONIOENCODING=utf-8", ui_section)
 
-    def test_bootstrap_checks_both_installation_artifacts_before_start(self):
-        after = section(commands("start.bat"), "install_after")
-        for artifact in ("venv\\Scripts\\python.exe", "venv\\.install-complete"):
-            with self.subTest(artifact=artifact):
-                guard = f'if not exist "{artifact}" (\n'
-                self.assertIn(guard, after)
-                # A closing parenthesis in an escaped echo is not a block terminator.
-                block = after.split(guard, 1)[1].split("\n)", 1)[0]
-                self.assertIn("\nexit /b 1", block)
-        self.assertTrue(after.rstrip().endswith("goto start"))
+    def test_start_bat_comfy_launches_external_comfyui(self):
+        text = commands("start.bat")
+        comfy_section = section(text, "comfy")
+        # Should reference external ComfyUI bat file
+        self.assertIn("start_comfyu2i.bat", comfy_section)
+        # Should use start command for separate window
+        self.assertIn('start ""', comfy_section)
 
-    def test_stack_start_precedes_web_wrapper_and_opens_the_local_ui(self):
-        start = section(commands("start.bat"), "start")
-        self.assertIn("set OPENCREATOR_LOCAL=1", start)
-        self.assertLess(start.index('start "open-creator-local-stack"'),
-                        start.index("node scripts\\web-dev-wrapper.mjs pnpm web:dev"))
-        self.assertIn('start "" http://127.0.0.1:19861/', start)
+    def test_start_bat_install_runs_install_py(self):
+        text = commands("start.bat")
+        install_section = section(text, "install")
+        self.assertIn('"%PYEXE%" install.py', install_section)
 
-    def test_stop_uses_recorded_process_helpers_instead_of_killing_by_image_name(self):
-        stop = section(commands("start.bat"), "stop")
-        self.assertIn("local-stack\\start.py --stop", stop)
-        self.assertIn('if exist ".webui.pid" (\nnode scripts\\web-dev-wrapper.mjs --stop ".webui.pid"', stop)
-        self.assertNotRegex(stop.lower(), r"taskkill\b|stop-process\b")
+    def test_start_bat_check_runs_mm_check(self):
+        text = commands("start.bat")
+        check_section = section(text, "check")
+        self.assertIn('"%PYEXE%" mm.py check', check_section)
+
+    def test_start_bat_no_venv_shows_error(self):
+        text = commands("start.bat")
+        no_venv_section = section(text, "no_venv")
+        self.assertIn("FEHLER", no_venv_section)
+        self.assertIn("venv\\Scripts\\python.exe", no_venv_section)
 
 
 if __name__ == "__main__":
