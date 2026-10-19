@@ -1,2 +1,5 @@
 *.safetensors
 /venv
+/assets
+/templates
+/promts
