@@ -164,6 +164,11 @@ def abspath(p: str | Path) -> Path:
 
 
 def target(cfg: dict, name: str) -> dict:
+    """Ziel-Config (image/video) mit aufgeloesten Pfaden liefern.
+
+    Im Offline-Modus werden zusaetzlich die aus docs/ ermittelten
+    Modellwurzeln an model_roots angehaengt.
+    """
     t = dict(cfg["targets"][name])
     t["name"] = name
     t["comfy_dir"] = abspath(t["comfy_dir"]) if t.get("comfy_dir") else None
@@ -264,6 +269,7 @@ def docs_entries(cfg: dict | None = None) -> list[dict]:
 
 
 def _reg_key(path_str: str) -> str:
+    """Normalisierten Schluessel fuer Duplikat-Erkennung von Pfaden liefern."""
     return path_str.replace("\\", "/").lower()
 
 
@@ -389,6 +395,10 @@ def offline_mode(cfg: dict | None = None) -> bool:
 # ───────────────────────────── HTTP ─────────────────────────────
 
 def http_json(url: str, data: dict | None = None, timeout: float = 15):
+    """JSON per HTTP abrufen/senden (POST wenn data gesetzt, sonst GET).
+
+    Wirft ConnectionError, wenn der Offline-Modus aktiv ist.
+    """
     if offline_mode():
         raise ConnectionError(f"Offline-Modus aktiv - HTTP blockiert: {url}")
     body = None
@@ -402,6 +412,7 @@ def http_json(url: str, data: dict | None = None, timeout: float = 15):
 
 
 def server_alive(url: str, timeout: float = 2.5) -> bool:
+    """True, wenn die ComfyUI-API unter url erreichbar ist (sonst False/Offline)."""
     if offline_mode():
         return False
     try:
@@ -459,6 +470,11 @@ class Catalog:
     """Welche Modelldateien sieht die Ziel-ComfyUI? (Platte oder live per API)"""
 
     def __init__(self, roots, url: str | None = None, prefer_live: bool = True):
+        """Katalog aufbauen: live per object_info wenn moeglich, sonst Platte.
+
+        Im Offline-Modus wird die API nie befragt - ausschliesslich die
+        lokalen roots werden per Dateisystem durchsucht.
+        """
         self.roots = [Path(r) for r in roots if Path(r).is_dir()]
         self.url = url
         self._names: dict[str, list[str]] = {}
@@ -480,6 +496,7 @@ class Catalog:
                 self.object_info = None
 
     def names(self, kind: str) -> list[str]:
+        """Dateinamen (relativ) einer Modell-Art liefern; scannt roots bei Bedarf."""
         if kind in self._names:
             return self._names[kind]
         seen: dict[str, str] = {}
@@ -498,6 +515,10 @@ class Catalog:
         return self._names[kind]
 
     def pick(self, kind: str, candidates, *, ext: str | None = None, required: bool = True) -> str | None:
+        """Passenden Modellnamen zu candidates finden (exakt, dann Teilstring).
+
+        Wirft ModelMissing, wenn required=True und nichts gefunden wird.
+        """
         cands = [c for c in candidates if c]
         names = self.names(kind)
         names_e = [n for n in names if n.lower().endswith(ext)] if ext else names
