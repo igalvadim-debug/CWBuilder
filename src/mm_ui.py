@@ -405,11 +405,13 @@ def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_of
 
 # ───────────────────────────── GUI ─────────────────────────────
 
+# CSS for the UI; passed to launch() (Gradio >= 6 moved css/theme out of Blocks).
+CSS = ".tiny {font-size:12px;color:#888;} footer {display:none!important;}"
+
 def build_ui() -> gr.Blocks:
     """Gradio-Oberflaeche mit gespeicherten Werten und Ereignis-Callbacks erstellen."""
     st = load_state()
-    css = ".tiny {font-size:12px;color:#888;} footer {display:none!important;}"
-    with gr.Blocks(title="CWBuilder", css=css, theme=gr.themes.Soft()) as app:
+    with gr.Blocks(title="CWBuilder") as app:
         gr.Markdown("## CWBuilder — ComfyUI Generator\n"
                     "<span class='tiny'>Nur Prompt schreiben und ERZEUGEN druecken - der Rest "
                     "hat Defaults. Turbo ist an; bei anderer Modellwahl abschaltbar.</span>")
@@ -554,7 +556,7 @@ def main() -> None:
     app = build_ui()
     app.queue(default_concurrency_limit=1).launch(
         server_name="127.0.0.1", server_port=7865, share=False,
-        show_api=False, inbrowser=True)
+        theme=gr.themes.Soft(), css=CSS, inbrowser=True)
 
 
 if __name__ == "__main__":
