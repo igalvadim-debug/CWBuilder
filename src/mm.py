@@ -30,7 +30,7 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-COMMANDS = {"video", "image", "list", "check", "-h", "--help"}
+COMMANDS = {"video", "image", "list", "check", "ui", "-h", "--help"}
 
 MODE_ALIASES = {
     "krea": "krea2", "krea-2": "krea2",
@@ -40,6 +40,12 @@ MODE_ALIASES = {
     "qwen": "qwen21", "qwen2.1": "qwen21", "qwen-image": "qwen21", "qwen-2.1": "qwen21",
     "z-image": "zimage", "zit": "zimage", "z": "zimage",
     "flux3": "flux3", "flux-3": "flux3", "flux3klein": "flux3", "flux3-base": "flux3", "f3": "flux3",
+    # MOSS aliases
+    "moss": "moss_t2i", "moss-t2i": "moss_t2i", "moss_t2i": "moss_t2i",
+    "moss-inpaint": "moss_inpaint", "moss_inpaint": "moss_inpaint",
+    "moss-detailer": "moss_detailer", "moss_detailer": "moss_detailer",
+    "moss-prompt": "moss_prompt_enhancer", "moss-prompt-enhancer": "moss_prompt_enhancer", "moss_prompt_enhancer": "moss_prompt_enhancer",
+    "moss-4step": "moss_4step", "moss_4step": "moss_4step", "moss4step": "moss_4step",
 }
 
 EPILOG = """\
@@ -52,6 +58,13 @@ Beispiele:
   mm.py image qwen-edit -i a.png -i b.png "Person aus Bild 2 in Szene 1" --run
   mm.py image flux3 --run                       Flux 3 (Klein Base int8 + Gemma 4 + Prompt-Upsampler)
   mm.py image flux3 --no-upsample --steps 28 --cfg 4.0 --run
+  mm.py image moss --run                        MOSS T2I (Turbo dmd8, 8 Steps)
+  mm.py image moss --turbo rapid4 --run         MOSS T2I mit RapidMOSSAdapter (4 Steps)
+  mm.py image moss-inpaint -i img.png --control-image mask.png --run
+  mm.py image moss-detailer -i portrait.png --run
+  mm.py image moss-4step --run                  MOSS 4-Step (RapidMOSS, 4 Steps)
+  mm.py ui                                      Gradio-Oberflaeche (Port 7865)
+
 """
 
 
@@ -289,6 +302,14 @@ def cmd_check(a) -> int:
     return 1 if bad else 0
 
 
+# ───────────────────────────── ui ─────────────────────────────
+
+def cmd_ui(a) -> int:
+    """Start Gradio UI."""
+    import mm_ui
+    return mm_ui.main()
+
+
 # ───────────────────────────── Parser ─────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -323,7 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.set_defaults(fn=cmd_video)
 
     i = sub.add_parser("image", help="Bild-Workflow erzeugen / ausfuehren")
-    i.add_argument("mode", help="krea2 | klein9b | klein4b | qwen-edit | qwen21 | zimage | flux3")
+    i.add_argument("mode", help="krea2 | klein9b | klein4b | qwen-edit | qwen21 | zimage | flux3 | moss | moss-inpaint | moss-detailer | moss-prompt | moss-4step")
     i.add_argument("items", nargs="*", help="Prompt-Text oder .txt; .json = Ausgabedatei")
     i.add_argument("-p", "--prompt")
     i.add_argument("-f", "--prompt-file")
@@ -337,7 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--scheduler")
     i.add_argument("--batch", type=int)
     i.add_argument("--lora", action="append", help="Name[:Staerke], mehrfach moeglich")
-    i.add_argument("--turbo", default="auto", help="auto | off | Preset (siehe 'list') | LoRA-Name")
+    i.add_argument("--turbo", default="auto", help="auto | off | dmd8 | rapid4 | Preset (siehe 'list') | LoRA-Name")
     i.add_argument("--variant", help="nur qwen21: int8 | turbo | gguf")
     i.add_argument("--unet")
     i.add_argument("--clip")
@@ -360,6 +381,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list", help="Modi, Turbo-LoRAs und Serverstatus").set_defaults(fn=cmd_list)
     sub.add_parser("check", help="alle Modi gegen vorhandene Modelle pruefen").set_defaults(fn=cmd_check)
+    sub.add_parser("ui", help="Gradio-Oberflaeche starten (Port 7865)").set_defaults(fn=cmd_ui)
     return ap
 
 

@@ -1,0 +1,115 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_turbo_nvfp4.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "qwen\\Qwen-Image-2.1-Fun-Acc-4Step.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "5": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "prompt": "/imagine prompt: character reference sheet DUO, cyberpunk neo-Tokyo 2087 partners -- LEFT: tall athletic man, tactical\r\n  matte-black vest, dark messy hair, jagged scar left cheek to jaw, advanced cybernetic left arm exposed carbon-fiber\r\n  glowing orange coolant channels -- RIGHT: young athletic woman, short silver-white asymmetric undercut, icy neon-blue\r\n  cybernetic eyes, form-fitting matte-charcoal jacket hex-weave cyan magnetic seals -- back-to-back confident stance,\r\n  rain-slicked rooftop, holographic magenta cyan kanji reflections, volumetric fog, anamorphic flares, 35mm grain, high\r\n  contrast rim lighting, orthographic insets, clean neutral gray background --ar 16:9 --style raw --stylize 250 --v 6.0",
+      "negative_prompt": "",
+      "resolution": 1024
+    }
+  },
+  "6": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "7": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "device": "auto",
+      "dtype": "default"
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "7",
+        0
+      ],
+      "seed": 89885546445655,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "5",
+        1
+      ],
+      "latent_image": [
+        "6",
+        0
+      ],
+      "denoise": 1.0
+    }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "filename_prefix": "mm_qwen21"
+    }
+  }
+}

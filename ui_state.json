@@ -1,0 +1,13 @@
+{
+  "mode": "krea2",
+  "aspect": "1:1 (Square)",
+  "mp": 0.5,
+  "duration": 8,
+  "fps": 24,
+  "steps": 0,
+  "seed": -1,
+  "turbo": true,
+  "run": true,
+  "negative": "",
+  "custom_test": "value"
+}

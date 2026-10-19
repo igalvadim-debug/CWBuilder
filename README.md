@@ -1,70 +1,104 @@
-# Minimax / ComfyUI Generator
+# CWBuilder — ComfyUI Generator
 
-Один пакет для двух задач:
+Ein Paket für zwei Aufgaben:
 
-1. **Видео Minimax-H3**: делает workflow-JSON через локальный HTML-генератор.
-2. **Картинки**: Krea 2, FLUX.2 Klein 9B/4B, Qwen Image 2.1, Qwen Image Edit 2511, Z-Image Turbo, с Turbo-LoRA и ControlNet.
+1. **Video**: MiniMax-H3 (eingebaut), LTX-2.5 (eingebaut) — Workflow-JSON direkt aus optimierten Vorlagen.
+2. **Bilder**: Krea 2, FLUX.2 Klein 9B/4B, Qwen Image 2.1, Qwen Image Edit, Z-Image Turbo, FLUX.3, **MOSS** (T2I, Inpaint, Detailer, Prompt Enhancer, 4-Step Rapid) — mit Turbo-LoRA, ControlNet, vLLM Prompt-Upsampler.
 
-Папку можно переносить куда угодно: все пути считаются от неё, а внешние пути лежат в `config.json`.
+Ordner verschiebbar: alle Pfade relativ zum Projekt, externe Pfade in `config.json`.
 
-## Запуск
+## Start
 
-- Двойной клик по `start.bat` открывает меню.
-- Перетащи `.txt` на `start.bat`: **весь текст файла** становится промтом для видео.
-- Из консоли:
+- Doppelklick `start.bat` → Menü.
+- `.txt` auf `start.bat` ziehen → **ganzer Dateiinhalt** wird Prompt (Video).
+- Aus der Konsole:
 
 ```
-start.bat video                                   (промт из prompts\prompt.txt)
-start.bat video "Маяк на рассвете" -o lighthouse.json --steps 4
+start.bat video                                   (Prompt aus prompts\prompt.txt)
+start.bat video "Leuchtturm bei Sonnenaufgang" -o lighthouse.json --steps 4
 start.bat image krea2 --run
 start.bat image klein9b -i foto.png --run
 start.bat image qwen21 --turbo p8 --control --control-image pose.png --run
-start.bat image qwen-edit -i a.png -i b.png "текст" --run
-start.bat list        (режимы, Turbo-LoRA, статус серверов)
-start.bat check       (все режимы против реально имеющихся моделей)
+start.bat image qwen-edit -i a.png -i b.png "Text" --run
+start.bat list        (Modi, Turbo-LoRAs, Server-Status)
+start.bat check       (alle Modi gegen vorhandene Modelle prüfen)
+start.bat ui          (Gradio-Weboberfläche auf 127.0.0.1:7865)
 ```
 
-## Что исправлено в видео-части
+## Video-Modi (eingebaut, kein Playwright)
 
-Старый `generate_minimax.bat` принимал первый аргумент за промт, поэтому `output.json` попадал в окно промта.
-Теперь `.json` в аргументах всегда означает **файл результата**, а `.txt` читается целиком.
-Если промт не указан, берётся `prompts\prompt.txt` из папки проекта (а не из текущей папки).
-Результат по умолчанию лежит в `output\minimax_h3_<время>.json`.
+| Modus | Beschreibung | Turbo (Standard) |
+|-------|--------------|------------------|
+| `minimax_h3` | MiniMax H3 Video — Szenen-Kette, Audio, VL-LLM, EasyCache, SageAttention | Turbo-LoRA (4 Steps), LoRA ein/ausschaltbar |
+| `ltx25` | LTX-Video 2.5 — Reference-Video, VL-LLM Frame-Beschreibung, Turbo-LoRA (8 Steps) | Turbo-LoRA (8 Steps), Refine-Denoise |
 
-## Режимы изображений
+Beide nutzen **eingebaute Workflow-Vorlagen** aus `output/` — kein Playwright, keine HTML-Generierung.
+Referenzbilder/Videos bekommen Zufallsnamen und werden nach `<ComfyUI>/input` kopiert.
 
-| Режим | Модель | Turbo-LoRA (`--turbo`) | ControlNet |
-|---|---|---|---|
+### MiniMax-H3 Optionen (Extras abschaltbar)
+`easycache`, `sage_attention`, `audio_enabled`, `lora_enabled`, `consistency_bible`, `keyframes`, `plan_export`, `skip_join`, `generate_references`, `external_tts`, `vl_llm_auto`.
+
+### LTX-2.5 Optionen
+`diffusion_model_25`, `turbo_lora_25`, `text_encoder` (Gemma), `clip_vision`, `video_vae`, `audio_vae`, `latents_upscaler`, `turbo_steps` (Standard 8), `refine` (Detail-LoRA Denoise), `vl_llm_auto`.
+
+## Bild-Modi
+
+| Modus | Modell | Turbo-LoRA (`--turbo` / UI-Checkbox) | ControlNet |
+|-------|--------|--------------------------------------|------------|
 | `krea2` | Krea 2 Turbo | `turbo`, `turbo2`, `distill` | `--control depth` (Control-LoRA) |
-| `klein9b` / `klein4b` | FLUX.2 Klein | нет, модель уже дистиллирована (4 шага) | `--control union` (экспериментально) |
+| `klein9b` / `klein4b` | FLUX.2 Klein | Modell bereits destilliert (4 Steps) | `--control union` (experimentell) |
 | `qwen21` | Qwen Image 2.1 (`--variant int8/turbo/gguf`) | `acc4`, `p8`, `p5`, `viggle4`, `viggle5` | `--control union` |
-| `qwen-edit` | Qwen Image Edit 2511 | `lightning` (4 шага) | нет |
-| `zimage` | Z-Image Turbo (AIO) | уже Turbo (8 шагов) | `--control union` или `tile` |
+| `qwen-edit` | Qwen Image Edit 2511 | `lightning` (4 Steps) | nein |
+| `zimage` | Z-Image Turbo (AIO) | bereits Turbo (8 Steps) | `--control union` oder `tile` |
+| `flux3` | FLUX.3 (Guidance Embedder) | — | — |
+| **`moss_t2i`** | **MOSS T2I** (Text → Bild) | Rapid 4-Step optional | — |
+| **`moss_inpaint`** | **MOSS Inpaint** | — | Maske (Wachstum/Blur/Engine wählbar) |
+| **`moss_detailer`** | **MOSS Detailer** (Gesichter) | — | **Gesichtsanzahl 1–4**, **SeedVR2 Upscale** |
+| **`moss_prompt_enhancer`** | **MOSS Prompt Enhancer** | — | LLM wählbar (auto/qwen3vl/chatgpt/llama), **Handoff an T2I** |
+| **`moss_4step`** | **MOSS Rapid 4-Step** | Rapid LoRA (4 Steps) | — |
 
-Прочее: `--lora имя:сила` (можно несколько раз), `-i` для референсов (несколько раз), `-W/-H`, `--steps`, `--cfg`, `--seed`, `--preprocess canny|depth|lineart|none`.
-Если Turbo-LoRA или модель не найдены, скрипт пишет, что искал и где, и предлагает похожие файлы.
+Prochee: `--lora name:strength` (mehrfach), `-i` für Referenzen (mehrfach), `-W/-H`, `--steps`, `--cfg`, `--seed`, `--preprocess canny|depth|lineart|none`.
+Falls Turbo-LoRA oder Modell fehlen: Skript zeigt, was wo gesucht wurde, und schlägt ähnliche Dateien vor.
 
-## Как это работает
+### vLLM Prompt-Upsampler (Flux 3 / MOSS / LTX-2.5 / MiniMax)
+Flux 3 Prompt-Upsampler (LLM, safetensors oder GGUF) wird über `ChatGPT/LLMLoaderNodes` geladen — Modell-Art `llm` im Katalog (`LLM`, `text_enchancer`, `diffusion_llms`, `large_language_model`).
 
-- Картинки: скрипт собирает workflow в API-формате (`output\mm_<режим>_<время>.api.json`).
-  С `--run` он отправляет его в ComfyUI (`D:\ComfyUi2`, порт 8291) и сохраняет результат в `output\`.
-- Список моделей берётся **у запущенной ComfyUI** (`/object_info`), то есть с учётом `extra_model_paths.yaml`.
-  Перед отправкой workflow проверяется: есть ли ноды, входы и файлы моделей.
-- `--start` (в меню включён) запускает ComfyUI через `start_bat` из `config.json`, если она ещё не работает.
-- Видео-JSON открывается в `D:\ComfyUiVideo` (порт 8197).
+## Gradio-Weboberfläche (`start.bat ui` / `python src\mm.py ui`)
 
-## Файлы
+- **Prompt oben**, Modus wählen, darunter **nur Optionen passend zum Modus**.
+- **Turbo standardmäßig AN** (Checkbox), bei anderer Modellwahl abschaltbar.
+- **Letzte Auswahl** wird in `ui_state.json` gemerkt (Modus, Aspect, Megapixels, Steps, Turbo, Seed, Negative, Run, Modelle).
+- **ComfyUI Health Check** (Button "🔄 Prüfen"): Erreichbarkeit, erforderliche Nodes (`/object_info`), Modelle (via Katalog).
+- **Output-Galerie** (Bilder) + Video-Player + **"📁 Output-Ordner öffnen"** Button.
+- **Per-Modus Optionen**:
+  - **MOSS Inpaint**: Masken-Wachstum (px), Masken-Weichzeichner (px), Inpaint-Engine (auto/standard/lama/sd).
+  - **MOSS Detailer**: Anzahl Gesichter (1–4, Slider), SeedVR2 Upscale (Checkbox).
+  - **MOSS Prompt Enhancer**: LLM (auto/qwen3vl/chatgpt/llama), Enhanced Prompt an T2I übergeben (Checkbox).
+
+## Wie es funktioniert
+
+- **Bilder**: Skript baut Workflow im API-Format (`output\mm_<modus>_<zeit>.api.json`).
+  Mit `--run` / "Sofort ausführen" sendet er an ComfyUI (`D:\ComfyUi2`, Port 8291) und speichert Ergebnisse in `output\`.
+- **Modell-Liste** kommt **von laufender ComfyUI** (`/object_info`) — berücksichtigt `extra_model_paths.yaml`.
+  Vor dem Senden Validierung: Nodes, Eingänge, Modelldateien vorhanden?
+- `--start` (im Menü an) startet ComfyUI via `start_bat` aus `config.json`, falls nicht läuft.
+- **Video-JSON** öffnet sich in `D:\ComfyUiVideo` (Port 8197).
+- **MOSS Workflows** nutzen eingebaute Node-Ketten (RapidMOSSAdapter, InpaintModelConditioning, DetailerFaceCrop, SeedVR2, PromptEnhancerLLM).
+
+## Dateien
 
 ```
-start.bat            меню и запуск (Python ищется сам: venv, python, py -3)
-config.json          порты, пути, модели Minimax, размеры по умолчанию
-prompts\prompt.txt   промт (весь текст)
-prompts\negative.txt негативный промт для картинок (пусто = без него)
-src\                 mm.py (CLI), mm_video.py, mm_images.py, mm_common.py
-assets\              локальный HTML-генератор Minimax
-docs\                заметки по моделям и нодам, примеры workflow
-output\              результаты
+start.bat            Menü & Start (Python: venv, python, py -3)
+config.json          Ports, Pfade, Modelle, Defaults
+prompts\prompt.txt   Prompt (ganzer Text)
+prompts\negative.txt Negativ-Prompt Bilder (leer = keiner)
+src\                 mm.py (CLI), mm_ui.py (Gradio), mm_video.py, mm_images.py, mm_common.py
+assets\              (Legacy: Minimax HTML-Generator)
+docs\                Modell-Notizen, Node-Referenz, Workflow-Beispiele
+output\              Ergebnisse + eingebaute Workflow-Vorlagen (minimax_h3.json, ltx25.json)
+ui_state.json        Letzte UI-Werte (wird automatisch erstellt)
 ```
 
-Переменные окружения (по желанию): `MM_PYTHON`, `MM_CONFIG`, `MM_OUTPUT_DIR`, `MM_IMAGE_URL`, `MM_VIDEO_URL`, `MM_MODEL_ROOTS`.
-Для видео при первом запуске ставится `playwright` и Chromium, если их нет. Для картинок хватает стандартного Python.
+Umgebungsvariablen (optional): `MM_PYTHON`, `MM_CONFIG`, `MM_OUTPUT_DIR`, `MM_IMAGE_URL`, `MM_VIDEO_URL`, `MM_MODEL_ROOTS`.
+
+Für Video beim ersten Start: `playwright` + Chromium Installation, falls nicht vorhanden. Für Bilder: Standard-Python reicht.

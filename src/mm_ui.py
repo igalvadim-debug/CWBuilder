@@ -15,6 +15,8 @@ Letzte Auswahl wird in ui_state.json gemerkt.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import threading
 import time
@@ -32,7 +34,8 @@ CFG = C.load_config()
 STATE_PATH = C.ROOT / "ui_state.json"
 _lock = threading.Lock()
 
-IMAGE_MODES = ["krea2", "klein9b", "klein4b", "qwen21", "qwen-edit", "zimage", "flux3"]
+IMAGE_MODES = ["krea2", "klein9b", "klein4b", "qwen21", "qwen-edit", "zimage", "flux3",
+               "moss_t2i", "moss_inpaint", "moss_detailer", "moss_prompt_enhancer", "moss_4step"]
 VIDEO_MODES = ["minimax_h3", "ltx25", "html"]
 MODE_LABELS = {
     "minimax_h3": "MiniMax H3 Video (eingebaut)",
@@ -45,6 +48,11 @@ MODE_LABELS = {
     "qwen-edit": "Qwen Image Edit Bild",
     "zimage": "Z-Image Turbo Bild",
     "flux3": "FLUX.3 Bild",
+    "moss_t2i": "MOSS T2I (Text zu Bild)",
+    "moss_inpaint": "MOSS Inpaint",
+    "moss_detailer": "MOSS Detailer (Gesichter)",
+    "moss_prompt_enhancer": "MOSS Prompt Enhancer",
+    "moss_4step": "MOSS 4-Step (Rapid)",
 }
 ALL_MODES = VIDEO_MODES + IMAGE_MODES
 ASPECT_CHOICES = [(a.split(" ")[0], a) for a in B.ASPECTS]
@@ -116,14 +124,111 @@ def server_status_md() -> str:
     return "   |   ".join(parts)
 
 
+def comfyui_health_check(target_name: str) -> tuple[bool, str, list[str], list[str]]:
+    """ComfyUI Gesundheitspruefung: Erreichbarkeit, erforderliche Nodes, Modelle.
+
+    Returns: (alive, status_md, missing_nodes, missing_models)
+    """
+    t = C.target(CFG, target_name)
+    alive = C.server_alive(t["url"], timeout=3)
+    if not alive:
+        return False, f"⚪ **{target_name} ComfyUI offline** (`{t['url']}`)", [], []
+
+    try:
+        obj_info = C.http_json(t["url"].rstrip("/") + "/object_info", timeout=30)
+    except Exception as e:
+        return True, f"🟡 **{target_name} erreichbar aber /object_info fehlgeschlagen**: {e}", [], []
+
+    # Required nodes per mode type
+    if target_name == "image":
+        required_nodes = {
+            "MOSS": ["MOSSImageUNETLoader", "MOSSImageCLIPLoader", "RapidMOSSAdapter", "InpaintModelConditioning"],
+            "Krea2": ["Krea2ControlLoRALoader", "Krea2ControlApply", "Krea2ControlImageEncode"],
+            "Qwen21": ["TextEncodeQwenImage21", "QwenImage21Cache", "QwenImageDiffsynthControlnet"],
+            "Flux3": ["Flux3ImageGuidanceEmbedder", "Flux2Scheduler"],
+            "ZImage": ["CheckpointLoaderSimple"],
+            "Klein": ["EmptyFlux2LatentImage", "Flux2Scheduler", "CFGGuider"],
+            "General": ["CheckpointLoaderSimple", "CLIPLoader", "VAELoader", "KSampler", "SaveImage"]
+        }
+        required_models = {
+            "moss_t2i": ["moss_image_sft_int8_convrot.safetensors", "qwen3.5_9b_int8_convrot.safetensors", "flux2_vae.safetensors"],
+            "moss_inpaint": ["moss_image_sft_int8_convrot.safetensors", "qwen3.5_9b_int8_convrot.safetensors", "flux2_vae.safetensors"],
+            "moss_detailer": ["moss_image_sft_int8_convrot.safetensors", "qwen3.5_9b_int8_convrot.safetensors", "flux2_vae.safetensors"],
+            "moss_4step": ["moss_image_sft_int8_convrot.safetensors", "qwen3.5_9b_int8_convrot.safetensors", "flux2_vae.safetensors", "rapid-moss-4step"],
+            "moss_prompt_enhancer": [],
+        }
+    else:  # video
+        required_nodes = {
+            "LTX": ["LTXVideoModelLoader", "LTXVideoSampler", "LTXVideoConditioner"],
+            "MiniMax": [],
+            "General": ["CheckpointLoaderSimple", "CLIPLoader", "VAELoader", "KSampler", "SaveImage"]
+        }
+        required_models = {}
+
+    missing_nodes = []
+    for category, nodes in required_nodes.items():
+        for node in nodes:
+            if node not in obj_info:
+                missing_nodes.append(f"{category}: {node}")
+
+    # Check models via catalog
+    cat = catalog_for(target_name)
+    missing_models = []
+    if target_name == "image":
+        for mode_key, models in required_models.items():
+            for model in models:
+                kind = "unet"
+                if "text" in model.lower() or "clip" in model.lower() or "qwen3" in model.lower() or "gemma" in model.lower():
+                    kind = "text_encoders"
+                elif "vae" in model.lower():
+                    kind = "vae"
+                elif "lora" in model.lower() or "rapid-moss" in model.lower():
+                    kind = "loras"
+                try:
+                    cat.pick(kind, [model], required=True)
+                except Exception:
+                    missing_models.append(f"{mode_key}: {model} ({kind})")
+
+    status = "🟢 **Alles OK**" if not missing_nodes and not missing_models else              "🟡 **Warnungen**" if missing_nodes and not missing_models else              "🔴 **Kritisch**"
+
+    md = f"{status} · `{t['url']}`"
+    if missing_nodes:
+        md += f"\n\n**Fehlende Nodes ({len(missing_nodes)}):**\n" + "\n".join(f"- {n}" for n in missing_nodes[:10])
+        if len(missing_nodes) > 10:
+            md += f"\n- ... und {len(missing_nodes) - 10} weitere"
+    if missing_models:
+        md += f"\n\n**Fehlende Modelle ({len(missing_models)}):**\n" + "\n".join(f"- {m}" for m in missing_models[:10])
+        if len(missing_models) > 10:
+            md += f"\n- ... und {len(missing_models) - 10} weitere"
+
+    return alive, md, missing_nodes, missing_models
+
+
+def open_output_folder():
+    """Oeffnet den Output-Ordner im Dateimanager."""
+    out_dir = C.output_dir(CFG)
+    try:
+        if os.name == "nt":
+            os.startfile(str(out_dir))
+        elif sys.platform == "darwin":
+            subprocess.run(["open", str(out_dir)])
+        else:
+            subprocess.run(["xdg-open", str(out_dir)])
+        return f"Geoeffnet: {out_dir}"
+    except Exception as e:
+        return f"Fehler beim Oeffnen: {e}"
+
+
 # ───────────────────────────── Sichtbarkeit je Modus ─────────────────────────────
 
 def layout_for(mode: str) -> dict:
     """Sichtbarkeit der Optionsgruppen fuer den gewaehlten Modus bestimmen."""
     v = mode in VIDEO_MODES
     img = mode in IMAGE_MODES
-    edit = mode in ("qwen-edit", "qwen21", "klein9b", "klein4b", "flux3", "minimax_h3")
+    edit = mode in ("qwen-edit", "qwen21", "klein9b", "klein4b", "flux3", "minimax_h3",
+                    "moss_inpaint", "moss_detailer")
     htmlm = mode == "html"
+    moss_modes = mode in ("moss_t2i", "moss_inpaint", "moss_detailer", "moss_prompt_enhancer", "moss_4step")
     return {
         "refs": edit and not htmlm,
         "aspect": v and not htmlm, "mp": v and not htmlm,
@@ -134,7 +239,11 @@ def layout_for(mode: str) -> dict:
         "neg": img or mode == "ltx25",
         "wh": img,
         "models": img,
-        "control": mode in ("qwen21", "zimage", "klein9b", "klein4b"),
+        "control": mode in ("qwen21", "zimage", "klein9b", "klein4b",
+                            "moss_inpaint", "moss_detailer"),
+        "moss_inpaint_opts": mode == "moss_inpaint",
+        "moss_detailer_opts": mode == "moss_detailer",
+        "moss_prompt_opts": mode == "moss_prompt_enhancer",
     }
 
 
@@ -307,7 +416,7 @@ def build_ui() -> gr.Blocks:
         status = gr.Markdown(server_status_md())
 
         mode = gr.Radio([(MODE_LABELS[m], m) for m in ALL_MODES], value=st["mode"],
-                        label="Modus", columns=5)
+                                label="Modus")
         prompt = gr.Textbox(label="Prompt", lines=5,
                             placeholder="Hier reinkopieren - leer lassen = prompts/prompt.txt")
         refs = gr.File(label="Referenzbilder (Zufallsname + Copy nach ComfyUI\\input)",
@@ -321,7 +430,7 @@ def build_ui() -> gr.Blocks:
             steps = gr.Number(value=st["steps"], label="Steps (0 = Standard)", precision=0)
         with gr.Row():
             turbo = gr.Checkbox(value=st["turbo"], label="Turbo (Standard)")
-            seed = gr.Number(value=st["seed"], label="Seed (-1 = zufallig)", precision=0)
+            seed = gr.Number(value=st["seed"], label="Seed (-1 = zufaellig)", precision=0)
             run_now = gr.Checkbox(value=st["run"], label="Sofort ausfuehren")
         extras = gr.CheckboxGroup(choices=[], value=[], label="Extras abschalten")
         negative = gr.Textbox(label="Negative Prompt", value=st["negative"], lines=2)
@@ -342,6 +451,20 @@ def build_ui() -> gr.Blocks:
             ctl_kind = gr.Dropdown(["auto", "union", "tile", "depth"], value="auto", label="Typ")
             ctl_img = gr.Image(type="filepath", label="Control-Bild")
 
+        # Per-mode option groups
+        with gr.Row(visible=False) as moss_inpaint_row:
+            moss_mask_grow = gr.Number(value=8, label="Masken-Wachstum (px)", precision=0)
+            moss_mask_blur = gr.Number(value=4, label="Masken-Weichzeichner (px)", precision=0)
+            moss_inpaint_engine = gr.Dropdown(["auto", "standard", "lama", "sd"], value="auto", label="Inpaint-Engine")
+
+        with gr.Row(visible=False) as moss_detailer_row:
+            moss_face_count = gr.Slider(minimum=1, maximum=4, value=1, step=1, label="Anzahl Gesichter (1-4)")
+            moss_seedvr2 = gr.Checkbox(value=False, label="SeedVR2 Upscale (nach Detailer)")
+
+        with gr.Row(visible=False) as moss_prompt_row:
+            moss_prompt_llm = gr.Dropdown(["auto", "qwen3vl", "chatgpt", "llama"], value="auto", label="LLM fuer Prompt-Enhancement")
+            moss_prompt_handoff = gr.Checkbox(value=True, label="Enhanced Prompt an T2I uebergeben")
+
         out_json = gr.Textbox(label="Workflow-Datei (leer = output/mm_<modus>_<zeit>.api.json)", value="")
         btn = gr.Button("ERZEUGEN", variant="primary", size="lg")
 
@@ -350,6 +473,13 @@ def build_ui() -> gr.Blocks:
             with gr.Column():
                 video_out = gr.Video(label="Video")
                 gallery = gr.Gallery(label="Bilder", columns=2)
+                open_folder_btn = gr.Button("📁 Output-Ordner oeffnen", variant="secondary")
+
+        # Health check row
+        with gr.Row():
+            health_image = gr.Markdown("Bild-ComfyUI: pruefen...")
+            health_video = gr.Markdown("Video-ComfyUI: pruefen...")
+            health_refresh = gr.Button("🔄 Pruefen", variant="secondary", size="sm")
 
         def apply_mode(m, u, c, v):
             """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern."""
@@ -372,10 +502,14 @@ def build_ui() -> gr.Blocks:
                 combo(tgt_name, "unet", needle_u, u),
                 combo(tgt_name, "text_encoders", needle_u, c),
                 combo(tgt_name, "vae", needle_u, v),
+                gr.update(visible=vis["moss_inpaint_opts"]),
+                gr.update(visible=vis["moss_detailer_opts"]),
+                gr.update(visible=vis["moss_prompt_opts"]),
             )
 
         outputs = [refs, aspect, mp, duration, fps, steps, turbo, extras, negative,
-                   models_row, wh_row, ctl_row, unet, clip, vae]
+                   models_row, wh_row, ctl_row, unet, clip, vae,
+                   moss_inpaint_row, moss_detailer_row, moss_prompt_row]
         mode.change(apply_mode, [mode, unet, clip, vae], outputs)
 
         def gen(*a):
@@ -398,6 +532,17 @@ def build_ui() -> gr.Blocks:
                   negative, refs, width, height, batch, unet, clip, vae, loras_txt,
                   ctl_on, ctl_kind, ctl_img, run_now, out_json]
         btn.click(gen, inputs, [log_box, video_out, gallery])
+
+        def refresh_health():
+            _, img_md, _, _ = comfyui_health_check("image")
+            _, vid_md, _, _ = comfyui_health_check("video")
+            return img_md, vid_md
+
+        health_refresh.click(refresh_health, None, [health_image, health_video])
+        open_folder_btn.click(open_output_folder, None, log_box)
+
+        # Initial health check
+        app.load(refresh_health, None, [health_image, health_video])
 
         gr.HTML("<div class='tiny'>Terminal: <code>start.bat</code> (Menue) oder "
                 "<code>python src\\mm.py image|video ...</code> — gleicher Kern wie hier.</div>")
