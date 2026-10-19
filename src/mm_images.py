@@ -158,6 +158,31 @@ def o(nid: str, slot: int = 0) -> list:
     return [nid, slot]
 
 
+def moss_clip(g: Graph, cat: Catalog, clip_name: str) -> list:
+    """MOSSImageCLIPLoader exakt wie im funktionierenden Referenz-Workflow
+    docs/mosst2i_withLora.json (Node 127): nur 'clip_name' + 'device'.
+
+    Ein etwaiges Pflichtfeld 'type' wird nur gesendet, wenn die laufende
+    ComfyUI es tatsaechlich verlangt - sonst Validierungsfehler
+    'unbekannte Eingabe type'."""
+    spec = (cat.object_info or {}).get("MOSSImageCLIPLoader")
+    wanted = {"clip_name": clip_name, "device": "default"}
+    if spec:
+        inp = spec.get("input", {})
+        reqd = inp.get("required", {})
+        optd = inp.get("optional", {})
+        allowed = {**reqd, **optd}
+        give = {k: v for k, v in wanted.items() if k in allowed}
+        if "type" in reqd and "type" not in give:
+            opts = combo_options(reqd["type"]) or []
+            give["type"] = next((x for x in opts if "moss" in str(x).lower()), opts[0] if opts else "flux")
+        missing = sorted(r for r in reqd if r not in give and not any(k.startswith(r + ".") for k in give))
+        if missing:
+            raise Unsupported(f"MOSSImageCLIPLoader braucht Eingaben {missing}, die wir nicht liefern koennen.")
+        return o(g.add("MOSSImageCLIPLoader", **give))
+    return o(g.add("MOSSImageCLIPLoader", **wanted))
+
+
 def align(v: int, step: int = 16) -> int:
     return max(256, int(round(v / step)) * step)
 
@@ -235,16 +260,18 @@ def _resolve_turbo_lora(p: Params, cat: Catalog, cand: str) -> str | None:
     return cat.pick("loras", [cand], required=False)
 
 
-def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo | None:
+def resolve_turbo(p: Params, cat: Catalog, info: dict, unet_name: str | None = None) -> Turbo | None:
     presets = TURBO_PRESETS.get(p.mode, {})
     choice = (p.turbo or "auto").strip().lower()
-    inherent = "turbo" in base_name.lower()
+    inherent = "turbo" in (unet_name or "").lower()
     if choice in ("off", "no", "none", "0", "false"):
         return None
 
     def strength_for(key: str, name: str) -> float:
-        """LoRA-Staerke: MOSS-DMD folgt docs/mosst2i_withLora.json (0.7), sonst 1.0."""
-        if key == "dmd8" or _reg_norm(name).endswith(_reg_norm(MOSS_TURBO_LORA_SUBPATH)):
+        """LoRA-Staerke: MOSS-DMD folgt docs/mosst2i_withLora.json (Node 128: 0.7), sonst 1.0."""
+        norm = _reg_norm(name)
+        if (key == "dmd8" or "dmd" in norm.lower()
+                or norm.endswith(_reg_norm(MOSS_TURBO_LORA_SUBPATH))):
             return MOSS_DMD_STRENGTH
         return 1.0
 
@@ -256,7 +283,10 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
             # flux3: Base ist kein Turbo-Modell und es gibt (noch) kein festes Preset -
             # auto laedt keine Turbo-LoRA, nur ein explizites --turbo <lora> wirkt.
             return None
-        key = next(iter(presets))
+        # MOSS: 'auto' folgt docs/mosst2i_withLora.json -> dort laeuft das SFT-Base-
+        # Modell (kein Turbo im Namen) MIT DMD-LoRA bei 8 Steps/CFG 1.0.
+        # dmd8 hat Vorrang vor rapid4.
+        key = "dmd8" if "dmd8" in presets else next(iter(presets))
         cand, steps, cfg = presets[key]
         name = _resolve_turbo_lora(p, cat, cand)
         if name is None:
@@ -265,7 +295,10 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
         t = Turbo(name, steps, cfg, key, strength_for(key, name))
     elif choice in presets:
         cand, steps, cfg = presets[choice]
-        name = cat.pick("loras", [cand])
+        name = _resolve_turbo_lora(p, cat, cand)
+        if name is None:
+            warn(info, f"Turbo-LoRA '{choice}' nicht gefunden - laeuft ohne.")
+            return None
         t = Turbo(name, steps, cfg, choice, strength_for(choice, name))
     else:
         name = cat.pick("loras", [p.turbo])
@@ -889,12 +922,12 @@ def build_moss_t2i(p: Params, cat: Catalog, info: dict) -> Graph:
     # MOSS UNet
     unet_name = cat.pick("unet", [p.unet] if p.unet else [MOSS_DEFAULT_UNET], required=True)
     note(info, "UNet", unet_name)
-    model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
+    model = o(g.add("UNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
     clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
-    clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
+    clip = moss_clip(g, cat, clip_name)
 
     # MOSS VAE
     vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
@@ -902,7 +935,7 @@ def build_moss_t2i(p: Params, cat: Catalog, info: dict) -> Graph:
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
     # Turbo handling
-    turbo = resolve_turbo(p, cat, info, "moss_t2i")
+    turbo = resolve_turbo(p, cat, info, unet_name)
     loras = ([(turbo.lora, turbo.strength)] if turbo else []) + user_loras(cat, p, info)
     model = lora_model_only(g, model, loras)
 
@@ -942,19 +975,19 @@ def build_moss_inpaint(p: Params, cat: Catalog, info: dict) -> Graph:
     # MOSS UNet
     unet_name = cat.pick("unet", [p.unet] if p.unet else ["moss_image_sft_int8_convrot.safetensors"], required=True)
     note(info, "UNet", unet_name)
-    model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
+    model = o(g.add("UNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
     clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
-    clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
+    clip = moss_clip(g, cat, clip_name)
 
     # MOSS VAE
     vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
-    turbo = resolve_turbo(p, cat, info, "moss_inpaint")
+    turbo = resolve_turbo(p, cat, info, unet_name)
     loras = ([(turbo.lora, 1.22)] if turbo else []) + user_loras(cat, p, info)
     model = lora_model_only(g, model, loras)
 
@@ -1000,19 +1033,19 @@ def build_moss_detailer(p: Params, cat: Catalog, info: dict) -> Graph:
     # MOSS UNet
     unet_name = cat.pick("unet", [p.unet] if p.unet else ["moss_image_sft_int8_convrot.safetensors"], required=True)
     note(info, "UNet", unet_name)
-    model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
+    model = o(g.add("UNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
     clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
-    clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
+    clip = moss_clip(g, cat, clip_name)
 
     # MOSS VAE
     vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
-    turbo = resolve_turbo(p, cat, info, "moss_detailer")
+    turbo = resolve_turbo(p, cat, info, unet_name)
     loras = ([(turbo.lora, 1.22)] if turbo else []) + user_loras(cat, p, info)
     model = lora_model_only(g, model, loras)
 
@@ -1070,12 +1103,12 @@ def build_moss_4step(p: Params, cat: Catalog, info: dict) -> Graph:
     # MOSS UNet
     unet_name = cat.pick("unet", [p.unet] if p.unet else ["moss_image_sft_int8_convrot.safetensors"], required=True)
     note(info, "UNet", unet_name)
-    model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
+    model = o(g.add("UNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
     clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
-    clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
+    clip = moss_clip(g, cat, clip_name)
 
     # MOSS VAE
     vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
