@@ -1356,7 +1356,19 @@ def scan_model_registry(roots=None) -> dict:
         removed = len([l for l in old_lines if l.strip()]) - len(keep)
         text = "\n".join(keep + sorted(new_entries, key=str.lower)) + ("\n" if keep or new_entries else "")
         MODELS_TXT.parent.mkdir(parents=True, exist_ok=True)
-        MODELS_TXT.write_text(text, encoding="utf-8")
+        # Atomar schreiben: erst in eine Temp-Datei desselben Verzeichnisses,
+        # dann os.replace(). Schlaegt der Schreibvorgang fehl (z.B. Platte voll,
+        # Datei gesperrt), bleibt die bestehende models.txt unversehrt.
+        tmp = MODELS_TXT.with_name(MODELS_TXT.name + ".tmp")
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, MODELS_TXT)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            raise
     return {"added": added, "removed": max(removed, 0),
             "total": len(keep) + len(new_entries), "path": str(MODELS_TXT)}
 
