@@ -30,12 +30,11 @@ echo [I] Installation / Re-Installation
 echo [P] Modi pruefen (mm.py check)
 echo [Q] Beenden
 echo ============================================================
-choice /c GCI PQ /n /m "Waehlen: "
-if errorlevel 6 goto :eof
-if errorlevel 5 goto :check
-if errorlevel 4 goto :install
-if errorlevel 3 goto :comfy
-if errorlevel 2 goto :ui
+choice /c GCIQP /n /m "Waehlen: "
+if errorlevel 5 goto :eof
+if errorlevel 4 goto :check
+if errorlevel 3 goto :install
+if errorlevel 2 goto :comfy
 if errorlevel 1 goto :ui
 
 :ui
