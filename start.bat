@@ -1,5 +1,5 @@
 @echo off
-rem CWBuilder — Startmenue
+rem CWBuilder - Startmenue
 setlocal
 chcp 65001 >nul
 cd /d "%~dp0"
@@ -22,9 +22,9 @@ if /i "%~1"=="check" goto :check
 :menu
 cls
 echo ============================================================
-echo  CWBuilder — Auswahl
+echo  CWBuilder - Auswahl
 echo ============================================================
-echo [G] Gradio UI (Port 7865) — Bild- und Video-Generierung
+echo [G] Gradio UI (Port 7865) - Bild- und Video-Generierung
 echo [C] ComfyUI fuer MOSS starten (Port 8291, externes Skript)
 echo [I] Installation / Re-Installation
 echo [P] Modi pruefen (mm.py check)
@@ -43,9 +43,13 @@ if not exist "venv\Scripts\python.exe" goto :no_venv
 set "PYEXE=venv\Scripts\python.exe"
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
-echo Starte Gradio UI (mm.py ui)...
+echo Starte Gradio UI (src\mm.py ui)...
 echo Interpreter: %PYEXE%
 "%PYEXE%" src\mm.py ui %*
+if errorlevel 1 (
+    echo FEHLER: Gradio UI wurde beendet (siehe Meldung oben).
+    pause
+)
 exit /b 0
 
 :comfy

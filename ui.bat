@@ -1,5 +1,5 @@
 @echo off
-rem CWBuilder — Gradio UI direkt starten
+rem CWBuilder - Gradio UI direkt starten
 setlocal
 chcp 65001 >nul
 cd /d "%~dp0"
