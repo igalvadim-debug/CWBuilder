@@ -405,13 +405,25 @@ def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_of
 
 # ───────────────────────────── GUI ─────────────────────────────
 
-# CSS for the UI; passed to launch() (Gradio >= 6 moved css/theme out of Blocks).
 CSS = ".tiny {font-size:12px;color:#888;} footer {display:none!important;}"
+
+def _gradio_version() -> tuple:
+    """Gradio-Version als Tuple (major, minor) liefern; bei Fehler (0, 0)."""
+    try:
+        parts = str(getattr(gr, "__version__", "")).split(".")
+        return (int(parts[0]), int(parts[1]))
+    except (ValueError, IndexError):
+        return (0, 0)
+
 
 def build_ui() -> gr.Blocks:
     """Gradio-Oberflaeche mit gespeicherten Werten und Ereignis-Callbacks erstellen."""
     st = load_state()
-    with gr.Blocks(title="CWBuilder") as app:
+    # Gradio < 6: theme/css gehoeren in den Blocks-Konstruktor.
+    init_kwargs = {}
+    if _gradio_version() < (6, 0):
+        init_kwargs = {"css": CSS, "theme": gr.themes.Soft()}
+    with gr.Blocks(title="CWBuilder", **init_kwargs) as app:
         gr.Markdown("## CWBuilder — ComfyUI Generator\n"
                     "<span class='tiny'>Nur Prompt schreiben und ERZEUGEN druecken - der Rest "
                     "hat Defaults. Turbo ist an; bei anderer Modellwahl abschaltbar.</span>")
@@ -554,9 +566,14 @@ def build_ui() -> gr.Blocks:
 def main() -> None:
     """Gradio-Oberflaeche mit serieller Queue lokal auf Port 7865 starten."""
     app = build_ui()
+    launch_kwargs = {"inbrowser": True}
+    # Gradio >= 6: theme/css wurden vom Blocks-Konstruktor zu launch() verschoben.
+    if _gradio_version() >= (6, 0):
+        launch_kwargs["theme"] = gr.themes.Soft()
+        launch_kwargs["css"] = CSS
     app.queue(default_concurrency_limit=1).launch(
         server_name="127.0.0.1", server_port=7865, share=False,
-        theme=gr.themes.Soft(), css=CSS, inbrowser=True)
+        **launch_kwargs)
 
 
 if __name__ == "__main__":
