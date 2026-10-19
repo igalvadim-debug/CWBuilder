@@ -487,6 +487,7 @@ def build_ui() -> gr.Blocks:
 
         mode = gr.Radio([(MODE_LABELS[m], m) for m in ALL_MODES], value=st["mode"],
                                 label="Modus")
+        previous_mode = gr.State(st["mode"])
         prompt = gr.Textbox(label="Prompt", lines=5,
                             placeholder="Hier reinkopieren - leer lassen = prompts/prompt.txt")
         refs = gr.File(label="Referenzbilder (Zufallsname + Copy nach ComfyUI\\input)",
@@ -564,10 +565,12 @@ def build_ui() -> gr.Blocks:
             except Exception:
                 return []
 
-        def apply_mode(m, u, c, v):
+        def apply_mode(m, u, c, v, prev_mode):
             """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern."""
             import mm_images as I
             vis = layout_for(m)
+            if m != prev_mode:
+                c = v = None
             save_state({"mode": m})
             tgt_name = "video" if m in VIDEO_MODES else "image"
             needle_u = {"ltx25": "ltx", "minimax_h3": "minimax|h3"}.get(m)
@@ -593,6 +596,7 @@ def build_ui() -> gr.Blocks:
                 gr.update(visible=vis["moss_inpaint_opts"]),
                 gr.update(visible=vis["moss_detailer_opts"]),
                 gr.update(visible=vis["moss_prompt_opts"]),
+                m,
             )
 
         def refresh_loras(m, u):
@@ -601,8 +605,8 @@ def build_ui() -> gr.Blocks:
 
         outputs = [refs, aspect, mp, duration, fps, steps, turbo, extras, negative,
                    models_row, wh_row, ctl_row, unet, clip, vae, loras_pick,
-                   moss_inpaint_row, moss_detailer_row, moss_prompt_row]
-        mode.change(apply_mode, [mode, unet, clip, vae], outputs)
+                   moss_inpaint_row, moss_detailer_row, moss_prompt_row, previous_mode]
+        mode.change(apply_mode, [mode, unet, clip, vae, previous_mode], outputs)
         unet.change(refresh_loras, [mode, unet], loras_pick)
 
         def gen(*a):
