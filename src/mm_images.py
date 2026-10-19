@@ -79,6 +79,7 @@ class Turbo:
     steps: int | None
     cfg: float | None
     label: str
+    strength: float = 1.0
 
 
 # Turbo-/Beschleuniger-LoRAs je Modus: key -> (Dateiname-Teilstring, Steps, CFG)
@@ -224,6 +225,13 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
     inherent = "turbo" in base_name.lower()
     if choice in ("off", "no", "none", "0", "false"):
         return None
+
+    def strength_for(key: str, name: str) -> float:
+        """LoRA-Staerke: MOSS-DMD folgt docs/mosst2i_withLora.json (0.7), sonst 1.0."""
+        if key == "dmd8" or _reg_norm(name).endswith(_reg_norm(MOSS_TURBO_LORA_SUBPATH)):
+            return MOSS_DMD_STRENGTH
+        return 1.0
+
     if choice == "auto":
         if inherent:
             info["notes"].append("Basismodell ist bereits ein Turbo-Modell - keine zusaetzliche Turbo-LoRA (erzwingen: --turbo <preset>)")
@@ -236,17 +244,18 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
         try:
             cand, steps, cfg = presets[key]
             name = cat.pick("loras", [cand])
-            t = Turbo(name, steps, cfg, key)
+            t = Turbo(name, steps, cfg, key, strength_for(key, name))
         except ModelMissing as e:
             warn(info, f"Turbo-LoRA '{key}' nicht gefunden - laeuft ohne.\n      {e}")
             return None
     elif choice in presets:
         cand, steps, cfg = presets[choice]
-        t = Turbo(cat.pick("loras", [cand]), steps, cfg, choice)
+        name = cat.pick("loras", [cand])
+        t = Turbo(name, steps, cfg, choice, strength_for(choice, name))
     else:
         name = cat.pick("loras", [p.turbo])
-        t = Turbo(name, steps_from_name(name), 1.0, p.turbo)
-    note(info, "Turbo-LoRA", f"{t.lora} (Preset '{t.label}', {t.steps or '?'} Steps)")
+        t = Turbo(name, steps_from_name(name), 1.0, p.turbo, strength_for("", name))
+    note(info, "Turbo-LoRA", f"{t.lora} (Preset '{t.label}', {t.steps or '?'} Steps, x{t.strength})")
     return t
 
 
@@ -1178,6 +1187,41 @@ MOSS_DEFAULT_UNET = "moss_image_sft_int8_convrot.safetensors"
 
 # Turbo-LoRA aus docs/mosst2i_withLora.json: Unterordner + Dateiname (case-sensitiv).
 MOSS_TURBO_LORA_SUBPATH = "MOSS/MOSS-Image-SFT-8-steps-dmd.safetensors"
+
+# Staerke der DMD-Turbo-LoRA im Referenz-Workflow docs/mosst2i_withLora.json
+# (node 128: LoraLoaderModelOnly, strength_model = 0.7).
+MOSS_DMD_STRENGTH = 0.7
+
+# ───────────────────────────── Modell-Registry (docs/models.txt) ─────────────────────────────
+
+def _reg_norm(s: str) -> str:
+    return s.replace("\\", "/").lower()
+
+
+# ───────────────────────────── Standard-Checkpoints je Modus ─────────────────────────────
+
+# Default-Diffusionsmodell je Modus - wird als korrekter Checkpoint direkt ins
+# Gradio-Dropdown geladen. Quelle: Workflow-JSONs unter docs/ (MOSS:
+# mosst2i_withLora.json); fuer diebrigen Modi die erste Bau-Kandidatenliste.
+MODE_DEFAULT_UNET: dict[str, str] = {
+    "krea2":     "krea2Turbo18For_v2",
+    "klein9b":   "flux2Klein_9b",
+    "klein4b":   "flux-2-klein-4b",
+    "qwen-edit": "qwen-image-edit-2511-Q4_K_S",
+    "qwen21":    "qwen_image_2.1_int8_convrot",
+    "zimage":    "z-image-turbo-fp8-aio",
+    "flux3":     FLUX3_UNET_CANDS[0],
+    "moss_t2i":  MOSS_DEFAULT_UNET,
+    "moss_inpaint": MOSS_DEFAULT_UNET,
+    "moss_detailer": MOSS_DEFAULT_UNET,
+    "moss_4step": MOSS_DEFAULT_UNET,
+}
+
+
+def default_unet_for(mode: str) -> str | None:
+    """Standard-Diffusionsmodell eines Modus liefern (None = kein fester Default)."""
+    return MODE_DEFAULT_UNET.get(mode)
+
 
 # Pfadbestandteile, die bei Modell-Scans / LoRA-Vorschlaegen ignoriert werden.
 REGISTRY_SKIP_PARTS = {"custom_nodes", ".disabled", "__pycache__", ".cache",
