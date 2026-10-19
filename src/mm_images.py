@@ -1218,9 +1218,49 @@ MODE_DEFAULT_UNET: dict[str, str] = {
 }
 
 
+# Standard-Text-Encoder / VAE je Modus - passen zu den Bau-Kandidatenlisten
+# der Builder; werden im Dropdown gewaehlt, wenn kein ausdruecklicher
+# (modusgleicher) Nutzerwert vorliegt.
+MODE_DEFAULT_CLIP: dict[str, str] = {
+    "krea2":     "qwen3vl_4b_fp8_scaled",
+    "klein9b":   "qwen_3_8b",
+    "klein4b":   "qwen_3_4b",
+    "qwen-edit": "qwen_2.5_vl_7b_fp8_scaled",
+    "qwen21":    "qwen3vl_8b_int8_convrot",
+    "flux3":     FLUX3_CLIP_CANDS[0],
+    "moss_t2i":  "qwen3.5_9b_int8_convrot.safetensors",
+    "moss_inpaint": "qwen3.5_9b_int8_convrot.safetensors",
+    "moss_detailer": "qwen3.5_9b_int8_convrot.safetensors",
+    "moss_4step": "qwen3.5_9b_int8_convrot.safetensors",
+}
+
+MODE_DEFAULT_VAE: dict[str, str] = {
+    "krea2":     "qwen_image_vae",
+    "klein9b":   "flux2_vae",
+    "klein4b":   "flux2_vae",
+    "qwen-edit": "qwen_image_vae",
+    "qwen21":    "qwen_image_2.1_vae_bf16",
+    "flux3":     "flux2_vae",
+    "moss_t2i":  "flux2_vae.safetensors",
+    "moss_inpaint": "flux2_vae.safetensors",
+    "moss_detailer": "flux2_vae.safetensors",
+    "moss_4step": "flux2_vae.safetensors",
+}
+
+
 def default_unet_for(mode: str) -> str | None:
     """Standard-Diffusionsmodell eines Modus liefern (None = kein fester Default)."""
     return MODE_DEFAULT_UNET.get(mode)
+
+
+def default_clip_for(mode: str) -> str | None:
+    """Standard-Text-Encoder eines Modus liefern (None = kein fester Default)."""
+    return MODE_DEFAULT_CLIP.get(mode)
+
+
+def default_vae_for(mode: str) -> str | None:
+    """Standard-VAE eines Modus liefern (None = kein fester Default)."""
+    return MODE_DEFAULT_VAE.get(mode)
 
 
 # Pfadbestandteile, die bei Modell-Scans / LoRA-Vorschlaegen ignoriert werden.
@@ -1247,8 +1287,44 @@ LORA_MODE_HINTS = {
 # anderen Modellfamilie zuordnen (z.B. loras/ltx2/... = LTX-Video-LoRAs).
 # Erscheint ein solcher Marker im Pfad und passt nicht zu den Suchtokens des
 # gewaehlten Modus/Diffusionsmodells, wird die LoRA nicht vorgeschlagen.
+# 'flux' ist bewusst NICHT als Marker enthalten: Ordner wie loras/flux/
+# gehoren zur Flux-Familie und werden ueber die Tokens der Modi
+# (klein9b/klein4b: 'flux2', flux3: 'flux') korrekt bewertet.
 LORA_FAMILY_MARKERS = ("ltx", "wan", "hunyuan", "sdxl", "sd15", "sd2",
-                       "minimax", "krea", "ideogram", "animatediff")
+                       "minimax", "krea", "ideogram", "animatediff",
+                       "z-image", "z_image")
+
+# Varianten der Fremdmarker, wie sie in Ordnernamen vorkommen koennen
+# (z.B. loras/ltx2/ = LTX Version 2.x). Erlaubte Familienvarianten (z.B.
+# 'flux2' fuer klein9b/klein4b) stehen in LORA_ALLOWED_FAMILIES und werden
+# vor der kuerzeren Stammvorfeld-Version ('flux') anerkannt.
+LORA_FAMILY_VARIANTS: dict[str, tuple] = {
+    "ltx": ("ltx2", "ltx23", "ltx25", "ltxv"),
+    "wan": ("wan21", "wan22"),
+}
+
+# Je Modus zusaetzlich erlaubte Familien-Varianten: erscheinen sie im Pfad,
+# wirken sie wie passende Suchtokens - die kuerzere Fremdmarkervorversion
+# (z.B. 'flux') disqualifiziert dann nicht.
+LORA_ALLOWED_FAMILIES: dict[str, tuple] = {
+    "klein9b": ("flux2",),
+    "klein4b": ("flux2",),
+}
+
+
+def _lora_dir_tokens(rel: str) -> list[str]:
+    """Ordnerteile eines relativen Pfads als ganze Tokens zerlegen.
+
+    Bindestrich-/punktverbundene Ordnernamen wie 'z-image' oder 'ltx-2.3'
+    bleiben dabei ganz ('z-image', 'ltx', '2', '3'); das verhindert, dass ein
+    Teil-Token (z.B. 'image') fremdspraechige LoRAs durchlaesst.
+    """
+    parts = _reg_norm(rel).replace("\\", "/").split("/")[:-1]
+    toks: list[str] = []
+    for p in parts:
+        toks.extend(t for t in re.split(r"[^a-z0-9]+", p) if t)
+        toks.append(p)   # whole hyphenated dir name, e.g. 'z-image'
+    return toks
 
 
 def registry_roots() -> list[Path]:
@@ -1399,12 +1475,22 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
     es = entries if entries is not None else load_models_txt()
     needle = _reg_norm(unet_choice.rsplit("/", 1)[-1]) if unet_choice else \
         _reg_norm(MOSS_DEFAULT_UNET)
+    # Dateiendung vor dem Token-Split abziehen, damit 'safetensors' nicht als
+    # Suchtoken fremde LoRAs matcht (Filter und 4-Token-Limit bleiben erhalten).
+    needle = re.sub(r"\.(safetensors|ckpt|pt|pth|bin|gguf)$", "", needle)
     toks = [t for t in re.split(r"[^a-z0-9]+", needle) if len(t) >= 3 and t != "image"][:4]
     toks += [t for t in LORA_MODE_HINTS.get(mode, []) if t not in toks]
     # Vorfilter: LoRAs muessen zum Modus/Diffusionsmodell passen. Ein Ordner-
     # oder Namens-Fremdmarker (ltx2/wan/sdxl/...), der nicht zu den Suchtokens
     # gehoert, disqualifiziert - so erscheinen bei MOSS keine LTX-LoRAS.
+    # Varianten der Marker (z.B. ltx2 fuer 'ltx') werden mit erkannt; ein
+    # ganzer Ordnername (z.B. 'flux2') gilt zunaechst als Stamm-Marker ('flux')
+    # und wird anerkannt, wenn eine erlaubte Familienvariante des Modi
+    # (klein9b/klein4b: 'flux2') im Pfad steckt.
     markers = {m for m in LORA_FAMILY_MARKERS if m not in toks}
+    marker_forms = ({v for stem, variants in LORA_FAMILY_VARIANTS.items()
+                     for v in variants if stem in markers})
+    allowed_fams = LORA_ALLOWED_FAMILIES.get(mode, ())
 
     hits: list[tuple] = []
     seen_labels: set[str] = set()
@@ -1412,7 +1498,10 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
         if "/loras/" not in _reg_norm(e["full"]) or _reg_skip(e["rel"]):
             continue
         low = _reg_norm(e["rel"])
-        if any(m in low for m in markers):
+        dir_toks = _lora_dir_tokens(e["rel"])
+        foreign = any(m in dt or any(f in dt for f in marker_forms)
+                      for dt in dir_toks for m in markers)
+        if foreign and not any(v in low for v in allowed_fams):
             continue
         score = sum(1 for t in toks if t in low)
         if not score and e["family"] and any(t in e["family"] for t in toks):
