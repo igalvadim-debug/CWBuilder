@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+*.safetensors
+/venv
+/assets
+/templates
+/promts
