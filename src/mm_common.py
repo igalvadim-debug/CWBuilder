@@ -24,6 +24,10 @@ DEFAULT_CONFIG: dict = {
     "output_dir": "output",
     "prompt_file": "prompts/prompt.txt",
     "negative_file": "prompts/negative.txt",
+    # Kompletter Offline-Betrieb: keine Netzwerkaufrufe, Modelle nur von der
+    # Platte und aus docs/ (models.txt, local_models.json). Nie ein Download.
+    "offline": True,
+    "docs_dir": "docs",
     # Zwei ComfyUI-Installationen: Bilder / Video (wegen Node-Konflikten getrennt)
     "targets": {
         "image": {
@@ -164,7 +168,125 @@ def target(cfg: dict, name: str) -> dict:
     t["name"] = name
     t["comfy_dir"] = abspath(t["comfy_dir"]) if t.get("comfy_dir") else None
     t["model_roots"] = [abspath(r) for r in t.get("model_roots", [])]
+    # Kompletter Offline-Betrieb: zusaetzlich alle Modellpfade aus docs/
+    # (models.txt / local_models.json) als Suchwurzeln verwenden.
+    if offline_mode(cfg):
+        for r in docs_model_roots(cfg):
+            if r not in t["model_roots"]:
+                t["model_roots"].append(r)
     return t
+
+
+def docs_dir(cfg: dict | None = None) -> Path:
+    """docs/-Ordner des Projekts (Pfadquelle fuer alle Modelle)."""
+    d = (cfg or {}).get("docs_dir", "docs")
+    return abspath(d)
+
+
+def _docs_kind(rel_parts: list[str]) -> str | None:
+    """Modell-Art aus den Pfadbestandteilen bestimmen (Schluessel von KIND_DIRS)."""
+    low = [p.lower() for p in rel_parts[:-1]]
+    table = {
+        "diffusion_models": "unet", "unet": "unet", "checkpoints": "checkpoints",
+        "text_encoders": "text_encoders", "clip": "text_encoders", "vae": "vae",
+        "loras": "loras", "lora": "loras", "controlnet": "controlnet",
+        "model_patches": "model_patches", "latent_upscale_models": "model_patches",
+    }
+    for key, kind in table.items():
+        if any(key in p for p in low):
+            return kind
+    for p in low:
+        if "llm" in p or "kobold" in p or "sillytavern" in p:
+            return "llm"
+    return None
+
+
+def docs_entries(cfg: dict | None = None) -> list[dict]:
+    """Alle Modelldateien aus docs/models.txt + docs/local_models.json auflisten.
+
+    Liefert [{'path': Path, 'kind': str|None}] - ausschliesslich lokal existierende
+ bzw. lokal angegebene Pfade; es wird nichts heruntergeladen.
+    """
+    cfg = cfg or {}
+    dd = docs_dir(cfg)
+    out: list[dict] = []
+    seen: set[str] = set()
+    mtxt = dd / "models.txt"
+    if mtxt.exists():
+        for raw in read_text(mtxt).splitlines():
+            line = raw.split("\u2192")[0].strip()
+            if not line or line.startswith("#"):
+                continue
+            low = line.replace("\\", "/").lower()
+            if not any(low.endswith(e) for e in EXTS):
+                continue
+            key = _reg_key(line)
+            if key in seen:
+                continue
+            seen.add(key)
+            parts = line.replace("\\", "/").split("/")
+            out.append({"path": Path(line), "kind": _docs_kind(parts)})
+    ljson = dd / "local_models.json"
+    if ljson.exists():
+        try:
+            data = json.loads(read_text(ljson))
+        except Exception:
+            data = {}
+        roots = [Path(str(r).replace("\\", "/")) for r in (data.get("roots") or [])]
+        models = data.get("models") or {}
+        lists: list[list] = []
+        for v in models.values():
+            if isinstance(v, list):
+                lists.append(v)
+            elif isinstance(v, dict):
+                lists.extend(x for x in v.values() if isinstance(x, list))
+        for entry in (e for lst in lists for e in lst if isinstance(e, dict)):
+            subdirs = entry.get("subdirs") or [entry.get("subdir", "")]
+            names = [entry.get("name")] if entry.get("name") else []
+            for globpat in entry.get("globs", []):
+                for root in roots:
+                    for hit in sorted(root.glob(str(globpat))):
+                        names.append(hit.name)
+            for root in roots:
+                for sub in subdirs:
+                    for nm in names:
+                        if not nm:
+                            continue
+                        p = Path(str(root) + "/" + str(sub) + "/" + str(nm)).resolve()
+                        key = _reg_key(str(p))
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        kind = next((k for k, subs in KIND_DIRS.items()
+                                     if any(str(s).lower() in str(sub).lower() for s in subs)), None)
+                        out.append({"path": p, "kind": kind})
+    return out
+
+
+def _reg_key(path_str: str) -> str:
+    return path_str.replace("\\", "/").lower()
+
+
+def docs_model_roots(cfg: dict | None = None) -> list[Path]:
+    """Einzigartige Modellwurzeln (models/<KIND>-Ebene) aus docs/ liefern."""
+    out: list[Path] = []
+    for e in docs_entries(cfg):
+        parts = str(e["path"]).replace("\\", "/").split("/")
+        kind = e["kind"] or "unet"
+        marker = KIND_DIRS[kind][0].lower()
+        cut = None
+        for i, p in enumerate(parts):
+            if marker in p.lower():
+                cut = i
+                break
+        if cut is None or cut == 0:
+            continue
+        root = Path("/".join(parts[:cut]))
+        if not root.is_absolute():
+            root = ROOT / root
+        if root not in out:
+            out.append(root)
+    return out
 
 
 def output_dir(cfg: dict) -> Path:
@@ -238,9 +360,37 @@ def resolve_negative(cfg: dict, override: str | None = None) -> str:
     return cfg["image"].get("negative", "")
 
 
+# ───────────────────────────── Offline-Modus ─────────────────────────────
+
+def offline_mode(cfg: dict | None = None) -> bool:
+    """True, wenn der reine Offline-Betrieb gilt (keine Netzwerkversuche).
+
+    Standardmaessig ist der Offline-Modus AN: dieses Projekt laedt niemals
+    Modelle aus dem Internet und macht keine externen HTTP-Anfragen. Alle
+    Modell- und Node-Pfade stehen im docs/-Ordner (models.txt,
+    local_models.json, models.md, custom_nodes.md). Ausdruecklich abschaltbar
+    ueber config.json ("offline": false), MM_OFFLINE=0 oder --online in den
+    Argumenten des Prozesses (mm.py / mm_ui.py); dann wird die lokale
+    ComfyUI-API (127.0.0.1) fuer Live-Auswahl/Ausfuehrung genutzt.
+    Ein Download von Modellen findet in keinem Modus statt.
+    """
+    if any(a == "--online" for a in sys.argv[1:]) or \
+            os.environ.get("MM_ONLINE", "").strip().lower() in ("1", "true", "yes"):
+        return False
+    v = os.environ.get("MM_OFFLINE")
+    if v is not None and v.strip():
+        return v.strip().lower() not in ("", "0", "false", "off", "no")
+    try:
+        return _load_config_cached().get("offline", True) is not False
+    except Exception:
+        return True
+
+
 # ───────────────────────────── HTTP ─────────────────────────────
 
 def http_json(url: str, data: dict | None = None, timeout: float = 15):
+    if offline_mode():
+        raise ConnectionError(f"Offline-Modus aktiv - HTTP blockiert: {url}")
     body = None
     headers = {}
     if data is not None:
@@ -252,6 +402,8 @@ def http_json(url: str, data: dict | None = None, timeout: float = 15):
 
 
 def server_alive(url: str, timeout: float = 2.5) -> bool:
+    if offline_mode():
+        return False
     try:
         http_json(url.rstrip("/") + "/system_stats", timeout=timeout)
         return True
@@ -312,7 +464,7 @@ class Catalog:
         self._names: dict[str, list[str]] = {}
         self.live_ok = False
         self.object_info: dict | None = None
-        if prefer_live and url and server_alive(url):
+        if prefer_live and url and not offline_mode() and server_alive(url):
             try:
                 self.object_info = http_json(url.rstrip("/") + "/object_info", timeout=120)
                 for kind, (cls, inp) in LIVE_SOURCES.items():
