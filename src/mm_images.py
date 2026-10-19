@@ -892,12 +892,12 @@ def build_moss_t2i(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "flux2-vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
@@ -945,12 +945,12 @@ def build_moss_inpaint(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
@@ -1003,12 +1003,12 @@ def build_moss_detailer(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
@@ -1073,12 +1073,12 @@ def build_moss_4step(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
