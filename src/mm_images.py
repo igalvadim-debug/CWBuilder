@@ -869,12 +869,12 @@ def build_moss_t2i(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "flux2-vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
@@ -920,12 +920,12 @@ def build_moss_inpaint(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
@@ -978,12 +978,12 @@ def build_moss_detailer(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
@@ -1048,12 +1048,12 @@ def build_moss_4step(p: Params, cat: Catalog, info: dict) -> Graph:
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
     # MOSS CLIP
-    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors", "moss-image-sft-qwen35-int8-convrot.safetensors"], ext=".safetensors", required=True)
+    clip_name = cat.pick("text_encoders", [p.clip] if p.clip else ["qwen3.5_9b_int8_convrot.safetensors"], ext=".safetensors", required=True)
     note(info, "Text-Encoder", clip_name)
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
@@ -1223,6 +1223,40 @@ def default_unet_for(mode: str) -> str | None:
     return MODE_DEFAULT_UNET.get(mode)
 
 
+# Passender Text-Encoder und VAE je Modus - Quelle: Workflow-JSONs unter docs/
+# und assets/ (MOSS: docs/mosst2i_withLora.json + 'assets/MOSS Image/*.json').
+# Damit immer das zum Checkpoint gehoerende Encoder/VAE gewaehlt wird, statt
+# per Teilstring einen falschen Kandidaten (z.B. clip_i) aufzuschnappen.
+MODE_DEFAULT_CLIP: dict[str, str] = {
+    "krea2":     "qwen3vl_4b_fp8_scaled",
+    "klein9b":   "flux2_text_encoders",
+    "klein4b":   "flux2_text_encoders",
+    "qwen-edit": "qwen_2.5_vl_7b_fp8_scaled",
+    "qwen21":    "qwen_2.5_vl_7b_fp8_scaled",
+    "moss_t2i":  "qwen3.5_9b_int8_convrot.safetensors",
+    "moss_inpaint": "qwen3.5_9b_int8_convrot.safetensors",
+    "moss_detailer": "qwen3.5_9b_int8_convrot.safetensors",
+    "moss_4step": "qwen3.5_9b_int8_convrot.safetensors",
+}
+
+MODE_DEFAULT_VAE: dict[str, str] = {
+    "moss_t2i":  "flux2_vae.safetensors",
+    "moss_inpaint": "flux2_vae.safetensors",
+    "moss_detailer": "flux2_vae.safetensors",
+    "moss_4step": "flux2_vae.safetensors",
+}
+
+
+def default_clip_for(mode: str) -> str | None:
+    """Standard-Text-Encoder eines Modus liefern (None = frei waehlbar)."""
+    return MODE_DEFAULT_CLIP.get(mode)
+
+
+def default_vae_for(mode: str) -> str | None:
+    """Standard-VAE eines Modus liefern (None = kein fester Default)."""
+    return MODE_DEFAULT_VAE.get(mode)
+
+
 # Pfadbestandteile, die bei Modell-Scans / LoRA-Vorschlaegen ignoriert werden.
 REGISTRY_SKIP_PARTS = {"custom_nodes", ".disabled", "__pycache__", ".cache",
                        "text_embed_cache", "node_modules"}
@@ -1248,7 +1282,8 @@ LORA_MODE_HINTS = {
 # Erscheint ein solcher Marker im Pfad und passt nicht zu den Suchtokens des
 # gewaehlten Modus/Diffusionsmodells, wird die LoRA nicht vorgeschlagen.
 LORA_FAMILY_MARKERS = ("ltx", "wan", "hunyuan", "sdxl", "sd15", "sd2",
-                       "minimax", "krea", "ideogram", "animatediff")
+                       "minimax", "krea", "ideogram", "animatediff",
+                       "moss", "flux2", "flux", "qwen", "z-image", "zimage")
 
 
 def registry_roots() -> list[Path]:
@@ -1399,7 +1434,10 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
     es = entries if entries is not None else load_models_txt()
     needle = _reg_norm(unet_choice.rsplit("/", 1)[-1]) if unet_choice else \
         _reg_norm(MOSS_DEFAULT_UNET)
-    toks = [t for t in re.split(r"[^a-z0-9]+", needle) if len(t) >= 3 and t != "image"][:4]
+    # Tokens: exakte Namensstaemme (>=3 Zeichen, Fuellworter 'image'/'sft'/'lora' aus)
+    # plus Modus-Stichwoerter (LORA_MODE_HINTS) als Rating-Treffer.
+    toks = [t for t in re.split(r"[^a-z0-9]+", needle)
+            if len(t) >= 3 and t not in ("image", "sft", "lora")][:4]
     toks += [t for t in LORA_MODE_HINTS.get(mode, []) if t not in toks]
     # Vorfilter: LoRAs muessen zum Modus/Diffusionsmodell passen. Ein Ordner-
     # oder Namens-Fremdmarker (ltx2/wan/sdxl/...), der nicht zu den Suchtokens
@@ -1412,7 +1450,13 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
         if "/loras/" not in _reg_norm(e["full"]) or _reg_skip(e["rel"]):
             continue
         low = _reg_norm(e["rel"])
-        if any(m in low for m in markers):
+        # Fremdmarker-Disqualifikation: nur ueber Ordner-/Pfadteile (exakt), damit
+        # LoRAs einer anderen Modellfamilie nicht vorgeschlagen werden. Bei MOSS
+        # faellt so z.B. loras/ltx2/LTX2.3_DMD_hybrid_v2 raus, obwohl 'dmd' ein
+        # MOSS-Stichwort ist; Dateinamen wie 'pixel_art_style_z_image_turbo'
+        # bleiben dagegen als generische Stil-LoRAs zulaessig.
+        path_parts = [p for p in low.split("/")[:-1] if p]
+        if any(p in markers for p in path_parts):
             continue
         score = sum(1 for t in toks if t in low)
         if not score and e["family"] and any(t in e["family"] for t in toks):
