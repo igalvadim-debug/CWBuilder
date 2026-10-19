@@ -1,8 +1,10 @@
 """CWBuilder Windows launcher contracts; these checks do not execute cmd.exe."""
 
 import re
+import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,14 +23,44 @@ def section(text, label):
 
 
 class CWBuilderLauncherContractTests(unittest.TestCase):
-    def test_install_bat_runs_install_py_with_venv_python(self):
+    def test_install_bat_validates_venv_before_using_it(self):
         text = commands("install.bat")
-        # Should call venv Python with install.py
-        self.assertIn('"%~dp0venv\\Scripts\\python.exe" install.py', text)
-        # Should forward all arguments
-        self.assertIn("%*", text)
+        # The venv branch must probe the interpreter, not trust mere existence.
+        self.assertIn('if exist "%~dp0venv\\Scripts\\python.exe" (', text)
+        self.assertIn('"%~dp0venv\\Scripts\\python.exe" -c "%VERCHK%" >nul 2>&1', text)
+        # Selection happens only when the probe succeeds.
+        self.assertIn('set "PYPYEXE=%~dp0venv\\Scripts\\python.exe"', text)
         # Should check Python version
-        self.assertIn("sys.version_info >= (3, 12)", text)
+        self.assertIn("sys.version_info ^>= (3, 12)", text)
+
+    def test_install_bat_has_no_unconditional_venv_invocation(self):
+        text = commands("install.bat")
+        # Direct invocation outside the guarded discovery block was removed.
+        self.assertNotIn('"%~dp0venv\\Scripts\\python.exe" install.py', text)
+
+    def test_install_bat_single_common_execution_path(self):
+        text = commands("install.bat")
+        exec_section = section(text, "exec")
+        # Every discovered interpreter runs through one quoted common launcher.
+        self.assertEqual(text.count(":exec"), 1)
+        self.assertIn('call "!PYPYEXE!" !PYARGS! "%~dp0.\\install.py" %*', exec_section)
+        # Should forward all arguments
+        self.assertIn("%*", exec_section)
+
+    def test_install_bat_probes_py_launcher_before_selecting_it(self):
+        text = commands("install.bat")
+        # py -3.12 is selected only after a successful probe.
+        self.assertIn("py -3.12 -c \"%VERCHK%\" >nul 2>&1", text)
+        self.assertIn('set "PYPYEXE=py"', text)
+        self.assertIn('set "PYARGS=-3.12"', text)
+        # If 3.12 is missing, discovery continues to PATH-based python.
+        self.assertIn(":path_python", text)
+        self.assertLess(text.index("py -3.12 -c"), text.index(":path_python"))
+
+    def test_install_bat_escapes_version_message(self):
+        text = commands("install.bat")
+        bad_python_section = section(text, "bad_python")
+        self.assertIn("Version ^< 3.12", bad_python_section)
 
     def test_start_bat_menu_has_required_options(self):
         text = commands("start.bat")
@@ -70,6 +102,189 @@ class CWBuilderLauncherContractTests(unittest.TestCase):
         no_venv_section = section(text, "no_venv")
         self.assertIn("FEHLER", no_venv_section)
         self.assertIn("venv\\Scripts\\python.exe", no_venv_section)
+
+
+class InstallBatContractTests(unittest.TestCase):
+    """Check installer branches without running an installation or a prompt."""
+
+    VENV_PYTHON = r"%~dp0venv\Scripts\python.exe"
+    LOCAL_PYTHONS = (
+        r"%LOCALAPPDATA%\Programs\Python\Python312\python.exe",
+        r"C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe",
+    )
+
+    def setUp(self):
+        self.text = commands("install.bat")
+        # :path_python is the label that follows interpreter discovery; the
+        # common launcher lives under :exec.
+        self.entry = self.text.split("\n:path_python\n", 1)[0]
+        self.execution = section(self.text, "exec")
+
+    def existence_guard(self, path, missing=False):
+        condition = "if not exist" if missing else "if exist"
+        match = re.search(
+            rf'^{condition} "{re.escape(path)}" \(\n(.*?)^\)',
+            self.entry, re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(match, f"Missing {condition} guard for {path}")
+        return match
+
+    def test_script_directory_and_utf8_are_set_before_discovery(self):
+        first_guard = self.entry.index('if not exist "%~dp0install.py"')
+        for command in ('setlocal EnableExtensions EnableDelayedExpansion',
+                        'chcp 65001 >nul', 'cd /d "%~dp0"',
+                        'set "PYTHONUTF8=1"', 'set "PYTHONIOENCODING=utf-8"'):
+            with self.subTest(command=command):
+                self.assertIn(command, self.entry[:first_guard].splitlines())
+
+    def test_missing_install_script_exits_before_interpreter_discovery(self):
+        guard = self.existence_guard("%~dp0install.py", missing=True)
+        self.assertIn("pause", guard.group(1).splitlines())
+        self.assertRegex(guard.group(1), r"(?m)^exit /b 1$")
+        self.assertLess(guard.end(), self.existence_guard(self.VENV_PYTHON).start())
+
+    def test_existing_venv_is_probed_and_selected_only_on_success(self):
+        guard = self.existence_guard(self.VENV_PYTHON)
+        # Mere existence is not enough: the interpreter must start and report >= 3.12.
+        self.assertIn(f'"{self.VENV_PYTHON}" -c "%VERCHK%" >nul 2>&1', guard.group(1))
+        self.assertIn(f'set "PYPYEXE={self.VENV_PYTHON}"', guard.group(1).splitlines())
+        self.assertRegex(guard.group(1), r"(?m)^goto exec$")
+        self.assertLess(guard.end(), self.existence_guard(self.LOCAL_PYTHONS[0]).start())
+        self.assertTrue(self.execution, "The venv jump must reach the installer call")
+
+    def test_absent_venv_is_not_invoked_during_discovery(self):
+        guard = self.existence_guard(self.VENV_PYTHON)
+        outside_guard = self.entry[:guard.start()] + self.entry[guard.end():]
+        self.assertNotRegex(
+            outside_guard,
+            rf'(?mi)^(?:call )?"{re.escape(self.VENV_PYTHON)}"\s',
+            "A missing venv must fall back without trying to execute its python.exe",
+        )
+
+    def test_local_python_candidates_precede_path_lookup_in_priority_order(self):
+        guards = [self.existence_guard(path) for path in self.LOCAL_PYTHONS]
+        self.assertLess(guards[0].end(), guards[1].start())
+        self.assertLess(guards[1].end(), self.entry.index("where py >nul 2>&1"))
+        for path, guard in zip(self.LOCAL_PYTHONS, guards):
+            with self.subTest(path=path):
+                assignment = re.search(r'^set "PYPYEXE=(.*)"$', guard.group(1), re.MULTILINE)
+                self.assertIsNotNone(assignment, "Existing Python must be selected")
+                self.assertEqual(assignment.group(1), path)
+                self.assertRegex(guard.group(1), r"(?m)^goto exec$")
+
+    def test_localappdata_python_is_invoked_quoted_for_profiles_with_spaces(self):
+        # LOCALAPPDATA may contain spaces; the common launcher quotes PYPYEXE.
+        path = self.LOCAL_PYTHONS[0]
+        guard = self.existence_guard(path)
+        self.assertIn(
+            f'set "PYPYEXE={path}"', guard.group(1).splitlines(),
+            "The discovered executable must reach the quoted common launcher",
+        )
+        self.assertIn('call "!PYPYEXE!" !PYARGS!', self.execution,
+                      "Executable paths with spaces need quoting at invocation")
+
+    def test_py_launcher_precedes_path_python_lookup(self):
+        # The py launcher is tried before PATH python; the old "clear PYPATH"
+        # dance is gone because selection now happens inside guarded blocks.
+        self.assertLess(self.entry.index("where py >nul 2>&1"),
+                        self.text.index("where python >nul 2>&1"))
+
+    def test_py_branch_probes_before_selecting_and_falls_through(self):
+        # Finding py.exe does not mean that it has a Python 3.12 installation:
+        # the branch probes first, selects only on success, and otherwise
+        # continues to PATH-based detection (:path_python).
+        launcher = self.entry.split("where py >nul 2>&1", 1)[1]
+        self.assertRegex(launcher, r"(?m)^if errorlevel 1 goto path_python$")
+        probe = re.search(r'^py -3\.12 -c "[^"]+" >nul 2>&1$', launcher, re.MULTILINE)
+        self.assertIsNotNone(
+            probe, "Probe py -3.12 so an unavailable runtime can fall back to PATH Python",
+        )
+        exe_selection = launcher.index('set "PYPYEXE=py"')
+        args_selection = launcher.index('set "PYARGS=-3.12"')
+        self.assertLess(probe.end(), exe_selection)
+        self.assertRegex(launcher[probe.end():exe_selection], r"if not errorlevel 1")
+        self.assertLess(exe_selection, args_selection)
+        self.assertRegex(launcher[args_selection:], r"(?m)^goto exec$")
+        # A machine with only Python 3.13 must still succeed via PATH fallback.
+        self.assertIn(":path_python", self.text)
+        self.assertLess(launcher.index("goto exec"), self.text.index(":path_python\nwhere python"))
+
+    def test_path_python_requires_discovery_and_supported_version_before_selection(self):
+        path_section = section(self.text, "path_python")
+        self.assertRegex(
+            path_section,
+            r'(?m)^where python >nul 2>&1\n'
+            r'if errorlevel 1 goto no_python\n'
+            r'python -c "[^"]+" >nul 2>&1\n'
+            r'if errorlevel 1 goto bad_python\n'
+            r'set "PYPYEXE=python"\n'
+            r'set "PYARGS="$',
+        )
+
+    def test_installer_call_quotes_script_path_and_forwards_all_arguments(self):
+        calls = [line for line in self.execution.splitlines() if line.startswith("call ")]
+        self.assertTrue(calls, "The execution section must call the installer")
+        self.assertEqual(calls[0], r'call "!PYPYEXE!" !PYARGS! "%~dp0.\install.py" %*')
+        self.assertEqual(sum("install.py" in line for line in calls), 1)
+
+    def test_installer_failure_exits_before_offering_to_start(self):
+        failure = re.search(
+            r'^if errorlevel 1 \(\n(.*?)^\)',
+            self.execution, re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(failure, "Installer errors must have a failure branch")
+        self.assertEqual(self.execution[:failure.start()].splitlines(),
+                         ['echo === CWBuilder Installation (alles lokal in diesem Ordner) ===',
+                          r'call "!PYPYEXE!" !PYARGS! "%~dp0.\install.py" %*'])
+        self.assertEqual(failure.group(1).splitlines()[-2:], ["pause", "exit /b 1"])
+        self.assertLess(failure.end(), self.execution.index("choice /c YN"))
+
+    def test_declining_start_skips_script_and_accepting_uses_script_relative_path(self):
+        self.assertRegex(
+            self.execution,
+            r'(?m)^choice /c YN [^\n]+\nif errorlevel 2 goto end\n'
+            r'call "%~dp0start\.bat"$',
+        )
+        self.assertEqual(section(self.text, "end").splitlines(), ["endlocal", "exit /b 0"])
+
+    def test_interpreter_errors_offer_explicit_override_and_exit_unsuccessfully(self):
+        for label in ("no_python", "bad_python"):
+            with self.subTest(label=label):
+                body = section(self.text, label)
+                self.assertRegex(body, r'(?m)^echo\s+python install\.py --python "[^"\n]+\.exe"$')
+                self.assertEqual(body.splitlines()[-2:], ["pause", "exit /b 1"])
+                self.assertNotRegex(body, r"(?m)^(?:call |goto (?:run|exec))")
+
+
+class InstallBatVersionProbeTests(unittest.TestCase):
+    """Execute the batch file's inline Python check at the support boundary."""
+
+    def setUp(self):
+        text = commands("install.bat")
+        # The probes reference the shared %VERCHK% variable; resolve it first
+        # and undo the CMD caret escape in front of ">=".
+        var = re.search(r'set "VERCHK=(.*)"', text)
+        self.assertIsNotNone(var, "A shared version check must be defined")
+        probe_src = var.group(1).replace("^>=", ">=")
+        self.assertRegex(text, r'(?m)^python -c "%VERCHK%" >nul 2>&1$',
+                         "PATH Python must have a version probe")
+        self.probe = compile(probe_src, "install.bat version probe", "exec")
+
+    def assert_probe_exit(self, version, expected):
+        with patch.object(sys, "version_info", version):
+            with self.assertRaises(SystemExit) as raised:
+                exec(self.probe, {})
+        self.assertEqual(raised.exception.code, expected)
+
+    def test_versions_below_python312_are_rejected(self):
+        for version in ((2, 7, 18), (3, 0, 0), (3, 11, 99)):
+            with self.subTest(version=version):
+                self.assert_probe_exit(version, 1)
+
+    def test_python312_and_newer_versions_are_accepted(self):
+        for version in ((3, 12, 0), (3, 12, 9), (3, 13, 0), (4, 0, 0)):
+            with self.subTest(version=version):
+                self.assert_probe_exit(version, 0)
 
 
 if __name__ == "__main__":
