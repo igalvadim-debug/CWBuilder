@@ -64,8 +64,8 @@ class CWBuilderLauncherContractTests(unittest.TestCase):
 
     def test_start_bat_menu_has_required_options(self):
         text = commands("start.bat")
-        # Menu should have G, C, I, P, Q options
-        self.assertIn("choice /c GCI PQ", text)
+        # Menu should have G, C, I, P, Q options (choice /c takes one string).
+        self.assertIn("choice /c GCIQP", text)
         # Should have :ui, :comfy, :install, :check labels
         for label in ["ui", "comfy", "install", "check"]:
             self.assertIn(f":{label}", text)
@@ -73,8 +73,11 @@ class CWBuilderLauncherContractTests(unittest.TestCase):
     def test_start_bat_ui_launches_gradio_on_port_7865(self):
         text = commands("start.bat")
         ui_section = section(text, "ui")
-        # Should use venv Python
-        self.assertIn('"%PYEXE%" mm.py ui', ui_section)
+        # Should use venv Python; mm.py lives under src\.
+        self.assertIn('"%PYEXE%" src\\mm.py ui', ui_section)
+        # A crash must not close the window silently.
+        self.assertIn("if errorlevel 1", ui_section)
+        self.assertIn("pause", ui_section)
         # Should set encoding
         self.assertIn("PYTHONUTF8=1", ui_section)
         self.assertIn("PYTHONIOENCODING=utf-8", ui_section)
@@ -95,7 +98,7 @@ class CWBuilderLauncherContractTests(unittest.TestCase):
     def test_start_bat_check_runs_mm_check(self):
         text = commands("start.bat")
         check_section = section(text, "check")
-        self.assertIn('"%PYEXE%" mm.py check', check_section)
+        self.assertIn('"%PYEXE%" src\\mm.py check', check_section)
 
     def test_start_bat_no_venv_shows_error(self):
         text = commands("start.bat")
@@ -251,7 +254,8 @@ class InstallBatContractTests(unittest.TestCase):
         for label in ("no_python", "bad_python"):
             with self.subTest(label=label):
                 body = section(self.text, label)
-                self.assertRegex(body, r'(?m)^echo\s+python install\.py --python "[^"\n]+\.exe"$')
+                # The override hint may be wrapped over several echo lines.
+                self.assertRegex(body, r'(?m)^echo\s+.*python install\.py --python "[^"\n]+\.exe"$')
                 self.assertEqual(body.splitlines()[-2:], ["pause", "exit /b 1"])
                 self.assertNotRegex(body, r"(?m)^(?:call |goto (?:run|exec))")
 

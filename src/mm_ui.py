@@ -565,19 +565,33 @@ def build_ui() -> gr.Blocks:
             except Exception:
                 return []
 
-        def apply_mode(m, u=None, c=None, v=None, prev=None):
+        def apply_mode(*args):
             """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern.
 
-            'prev' ist der zuvor gewaehlte Modus als Session-State (gr.State) -
-            so erhaelt jede Sitzung korrekt ihre Modus-Defaults, ohne dass ein
-            serverweiter Zustand andere Sitzungen ueberschreibt.
+            Aufruf-Signatur: (m, u, c, v[, prev]) - 'prev' ist der zuvor gewaehlte
+            Modus als Session-State (gr.State). Aeltere Gradio-Versionen (und die
+            Queue-Ausfuehrung) geben State-Eingaben nicht an die Funktion weiter;
+            dann wuerde ein starres 5-Parameter-Signal mit
+            'takes 4 positional arguments but 5 were given' abbrechen. Deshalb
+            variadisch annehmen und fehlende Werte tolerieren.
             """
             import mm_images as I
+            # Eingaben normieren: Radio-Wert kann je nach Gradio-Version als
+            # roher Wert oder als {"value": ...}-Dict ankommen.
+            def _val(x):
+                return x.get("value") if isinstance(x, dict) else x
+            args = [_val(a) for a in args]
+            m = args[0]
+            u = args[1] if len(args) > 1 else None
+            c = args[2] if len(args) > 2 else None
+            v = args[3] if len(args) > 3 else None
+            prev = args[4] if len(args) > 4 else None
             vis = layout_for(m)
             save_state({"mode": m})
             # Moduswechsel: aus dem vorherigen Modus uebernommene Encoder-/VAE-
             # Auswahl ignorieren, damit der Default des neuen Modus greift.
-            mode_changed = (m != prev)
+            # 'prev' fehlt bei aelterem Gradio -> Server-Zustand als Fallback.
+            mode_changed = (m != prev) if prev is not None else (m != load_state().get("mode"))
             tgt_name = "video" if m in VIDEO_MODES else "image"
             needle_u = {"ltx25": "ltx", "minimax_h3": "minimax|h3"}.get(m)
             ch = B._changes("ltx25" if m == "ltx25" else "minimax_h3") \
@@ -594,7 +608,7 @@ def build_ui() -> gr.Blocks:
                        prefer=I.default_clip_for(m))
             vv = combo(tgt_name, "vae", needle_u, vae_cur,
                        prefer=I.default_vae_for(m))
-            return (
+            updates = (
                 gr.update(visible=vis["refs"]),
                 gr.update(visible=vis["aspect"]), gr.update(visible=vis["mp"]),
                 gr.update(visible=vis["dur"]), gr.update(visible=vis["fps"]),
@@ -611,8 +625,11 @@ def build_ui() -> gr.Blocks:
                 gr.update(visible=vis["moss_inpaint_opts"]),
                 gr.update(visible=vis["moss_detailer_opts"]),
                 gr.update(visible=vis["moss_prompt_opts"]),
-                m,
             )
+            # Letzter Output ist previous_mode (gr.State): den gerade
+            # gewaehlten Modus zurueckgeben, damit beim naechsten Wechsel
+            # 'prev' korrekt gesetzt ist.
+            return updates + (m,)
 
         def refresh_loras(m, u):
             """LoRA-Auswahl erneut füllen, wenn das Diffusionsmodell wechselt."""
