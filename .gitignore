@@ -1,5 +1,2 @@
-*.safetensors
-/venv
-/assets
-/templates
-/promts
+__pycache__/
+*.pyc
