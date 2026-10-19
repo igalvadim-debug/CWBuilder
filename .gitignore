@@ -7,7 +7,6 @@ testmodels/
 /venv
 
 /promts
-12
 __pycache__/
 
 *.pyc
