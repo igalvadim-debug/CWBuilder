@@ -101,8 +101,14 @@ def catalog_for(target_name: str):
     return cat
 
 
-def combo(target_name: str, kind: str, needle: str | None = None, current: str | None = None):
-    """Live-Dropdown der Modelle; Vorfilter 'needle' (Substrings, '|'-getrennt)."""
+def combo(target_name: str, kind: str, needle: str | None = None, current: str | None = None,
+          prefer: str | None = None):
+    """Live-Dropdown der Modelle; Vorfilter 'needle' (Substrings, '|'-getrennt).
+
+    'prefer' ist der modusspezifische Standard-Checkpoint: er wird gewaehlt,
+    wenn 'current' leer/unbekannt ist oder nur per Teilstring matcht -
+    so steht im Dropdown direkt das richtige Modell des Workflows.
+    """
     cat = catalog_for(target_name)
     names = cat.names(kind)
     if needle:
@@ -110,8 +116,29 @@ def combo(target_name: str, kind: str, needle: str | None = None, current: str |
         filt = [n for n in names if any(x in n.lower() for x in low)]
         if filt:
             names = filt
-    value = current if current in names else (names[0] if names else None)
+    def _exact(c):
+        c = c.lower()
+        for n in names:
+            nl = n.lower()
+            base = nl.replace("\\", "/").split("/")[-1]
+            if c in (nl, base, base.rsplit(".", 1)[0]):
+                return n
+        return None
+    value = _exact(current) if current else None
+    if value is None and prefer:
+        value = _exact(prefer)
+    if value is None and current:
+        # Teilstring-Treffer des bisherigen Werts vor der Standardauswahl.
+        c = _reg_ci(current)
+        hits = sorted((n for n in names if c in n.lower()), key=len)
+        value = hits[0] if hits else None
+    if value is None:
+        value = names[0] if names else None
     return gr.update(choices=names, value=value)
+
+
+def _reg_ci(s: str) -> str:
+    return s.lower().replace("\\", "/").split("/")[-1]
 
 
 def server_status_md() -> str:
@@ -479,12 +506,15 @@ def build_ui() -> gr.Blocks:
         negative = gr.Textbox(label="Negative Prompt", value=st["negative"], lines=2)
 
         with gr.Row(visible=False) as models_row:
-            unet = gr.Dropdown(label="Diffusion-Modell", choices=[], allow_custom_value=True)
-            clip = gr.Dropdown(label="Text-Encoder", choices=[], allow_custom_value=True)
-            vae = gr.Dropdown(label="VAE", choices=[], allow_custom_value=True)
+            # Checkpoints in zwei Reihen, damit fuer die LoRA-Auswahl genug Platz bleibt.
+            with gr.Row():
+                unet = gr.Dropdown(label="Diffusion-Modell", choices=[], allow_custom_value=True)
+                clip = gr.Dropdown(label="Text-Encoder", choices=[], allow_custom_value=True)
+            with gr.Row():
+                vae = gr.Dropdown(label="VAE", choices=[], allow_custom_value=True)
+                loras_txt = gr.Textbox(label="LoRAs extra (Name:Staerke, Komma)", value="",
+                                       info="Eintrag aus der Auswahl oben: Name; eigener Eintrag: Name:1.0")
             loras_pick = gr.CheckboxGroup(choices=[], label="LoRAs fuer dieses Modell (Vorschlag)", value=[])
-            loras_txt = gr.Textbox(label="LoRAs extra (Name:Staerke, Komma)", value="",
-                                   info="Eintrag aus der Auswahl oben: Name; eigener Eintrag: Name:1.0")
 
         with gr.Row(visible=False) as wh_row:
             width = gr.Number(value=CFG["image"]["width"], label="Breite", precision=0)
@@ -536,13 +566,14 @@ def build_ui() -> gr.Blocks:
 
         def apply_mode(m, u, c, v):
             """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern."""
+            import mm_images as I
             vis = layout_for(m)
             save_state({"mode": m})
             tgt_name = "video" if m in VIDEO_MODES else "image"
             needle_u = {"ltx25": "ltx", "minimax_h3": "minimax|h3"}.get(m)
             ch = B._changes("ltx25" if m == "ltx25" else "minimax_h3") \
                 if m in ("ltx25", "minimax_h3") else {}
-            uu = combo(tgt_name, "unet", needle_u, u)
+            uu = combo(tgt_name, "unet", needle_u, u, prefer=I.default_unet_for(m))
             sel_u = uu.get("value") if isinstance(uu, dict) else None
             picks = lora_suggestions(m, sel_u or u)
             return (

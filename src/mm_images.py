@@ -1243,6 +1243,13 @@ LORA_MODE_HINTS = {
     "moss_4step": ["moss", "rapid"],
 }
 
+# Fremdmarker: Ordner-/Namensbestandteile, die eine LoRA eindeutig einer
+# anderen Modellfamilie zuordnen (z.B. loras/ltx2/... = LTX-Video-LoRAs).
+# Erscheint ein solcher Marker im Pfad und passt nicht zu den Suchtokens des
+# gewaehlten Modus/Diffusionsmodells, wird die LoRA nicht vorgeschlagen.
+LORA_FAMILY_MARKERS = ("ltx", "wan", "hunyuan", "sdxl", "sd15", "sd2",
+                       "minimax", "krea", "ideogram", "animatediff")
+
 
 def registry_roots() -> list[Path]:
     """Modellwurzeln aus config.json (image+video, ohne Duplikate) als Pfade liefern."""
@@ -1382,12 +1389,19 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
         _reg_norm(MOSS_DEFAULT_UNET)
     toks = [t for t in re.split(r"[^a-z0-9]+", needle) if len(t) >= 3 and t != "image"][:4]
     toks += [t for t in LORA_MODE_HINTS.get(mode, []) if t not in toks]
+    # Vorfilter: LoRAs muessen zum Modus/Diffusionsmodell passen. Ein Ordner-
+    # oder Namens-Fremdmarker (ltx2/wan/sdxl/...), der nicht zu den Suchtokens
+    # gehoert, disqualifiziert - so erscheinen bei MOSS keine LTX-LoRAS.
+    markers = {m for m in LORA_FAMILY_MARKERS if m not in toks}
+
     hits: list[tuple] = []
     seen_labels: set[str] = set()
     for e in es:
         if "/loras/" not in _reg_norm(e["full"]) or _reg_skip(e["rel"]):
             continue
         low = _reg_norm(e["rel"])
+        if any(m in low for m in markers):
+            continue
         score = sum(1 for t in toks if t in low)
         if not score and e["family"] and any(t in e["family"] for t in toks):
             score = 1
