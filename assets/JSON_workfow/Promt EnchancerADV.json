@@ -1,0 +1,1564 @@
+{
+  "id": "05b3a7da-e84f-41f6-ba56-7772e19ec8a7",
+  "revision": 0,
+  "last_node_id": 5478,
+  "last_link_id": 14139,
+  "nodes": [
+    {
+      "id": 5412,
+      "type": "PrimitiveInt",
+      "pos": [
+        213.63332694115974,
+        9847.401282142082
+      ],
+      "size": [
+        370,
+        110
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "value",
+          "name": "value",
+          "type": "INT",
+          "widget": {
+            "name": "value"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "INT",
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            14134
+          ]
+        }
+      ],
+      "title": "Duration",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.7.0",
+        "Node name for S&R": "PrimitiveInt",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.7"
+        },
+        "hasSecondTab": false,
+        "widget_ue_connectable": {},
+        "secondTabText": "Send Back",
+        "enableTabs": false,
+        "secondTabOffset": 80,
+        "tabWidth": 65,
+        "secondTabWidth": 65,
+        "tabXOffset": 10
+      },
+      "widgets_values": [
+        174,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 174,
+        "fixed": "fixed"
+      },
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 5478,
+      "type": "76416b27-a158-4706-82a2-a89e803f95e1",
+      "pos": [
+        1955.1758865119864,
+        9795.434646003814
+      ],
+      "size": [
+        210,
+        122
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "int_",
+          "type": "INT",
+          "link": 14134
+        },
+        {
+          "label": "Promt",
+          "name": "text_a",
+          "type": "STRING",
+          "link": 14135
+        },
+        {
+          "name": "image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 14136
+        },
+        {
+          "label": "switch",
+          "name": "switch",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "switch"
+          },
+          "link": 14137
+        }
+      ],
+      "outputs": [
+        {
+          "name": "any",
+          "type": "*",
+          "links": [
+            14138
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.2",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        },
+        "previewExposures": []
+      },
+      "widgets_values": [
+        false,
+        0
+      ],
+      "widgets_values_named": {
+        "switch": false,
+        "seed": 0
+      }
+    },
+    {
+      "id": 5425,
+      "type": "PreviewAny",
+      "pos": [
+        2316.9813430686704,
+        9766.273454346388
+      ],
+      "size": [
+        510,
+        360
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "source",
+          "name": "source",
+          "type": "*",
+          "link": 14138
+        }
+      ],
+      "outputs": [
+        {
+          "label": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.16.3",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.2"
+        },
+        "hasSecondTab": false,
+        "secondTabOffset": 80,
+        "tabWidth": 65,
+        "secondTabWidth": 65,
+        "widget_ue_connectable": {},
+        "secondTabText": "Send Back",
+        "enableTabs": false,
+        "ttNbgOverride": {
+          "bgcolor": "#653",
+          "groupcolor": "#b58b2a",
+          "color": "#432"
+        },
+        "tabXOffset": 10
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 5460,
+      "type": "LoadImage",
+      "pos": [
+        1544.7795814250865,
+        9420.765946937303
+      ],
+      "size": [
+        282.798828125,
+        314
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            14136
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.2",
+        "Node name for S&R": "LoadImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "02185.jpeg",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "02185.jpeg",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 5418,
+      "type": "PrimitiveBoolean",
+      "pos": [
+        1462.8030649999619,
+        9891.711194604746
+      ],
+      "size": [
+        270,
+        100
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "value",
+          "name": "value",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "value"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "BOOLEAN",
+          "name": "BOOLEAN",
+          "type": "BOOLEAN",
+          "links": [
+            14137
+          ]
+        }
+      ],
+      "title": "Boolean (Enable Prompt Enhance)",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.22.0",
+        "Node name for S&R": "PrimitiveBoolean",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.2"
+        },
+        "hasSecondTab": false,
+        "secondTabOffset": 80,
+        "tabWidth": 65,
+        "secondTabWidth": 65,
+        "widget_ue_connectable": {},
+        "secondTabText": "Send Back",
+        "enableTabs": false,
+        "ttNbgOverride": {
+          "bgcolor": "#653",
+          "groupcolor": "#b58b2a",
+          "color": "#432"
+        },
+        "tabXOffset": 10
+      },
+      "widgets_values": [
+        true
+      ],
+      "widgets_values_named": {
+        "value": true
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 5474,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        1473.1404095819228,
+        10192.290298559952
+      ],
+      "size": [
+        470.66966751525865,
+        479.31880236144934
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "value",
+          "name": "value",
+          "type": "STRING",
+          "widget": {
+            "name": "value"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            14135
+          ]
+        }
+      ],
+      "title": "Prompt",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.16.3",
+        "Node name for S&R": "PrimitiveStringMultiline",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.7"
+        },
+        "hasSecondTab": false,
+        "secondTabOffset": 80,
+        "tabWidth": 65,
+        "secondTabWidth": 65,
+        "widget_ue_connectable": {},
+        "secondTabText": "Send Back",
+        "enableTabs": false,
+        "ttNbgOverride": {
+          "bgcolor": "#653",
+          "groupcolor": "#b58b2a",
+          "color": "#432"
+        },
+        "tabXOffset": 10
+      },
+      "widgets_values": [
+        "A medium shot from chest to wok frames a night-market chef under a corrugated tin awning, a carbon-steel wok on a roaring jet burner, a column of orange flame leaping as he tosses oil and garlic. "
+      ],
+      "widgets_values_named": {
+        "value": "A medium shot from chest to wok frames a night-market chef under a corrugated tin awning, a carbon-steel wok on a roaring jet burner, a column of orange flame leaping as he tosses oil and garlic. "
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      14134,
+      5412,
+      0,
+      5478,
+      0,
+      "INT"
+    ],
+    [
+      14135,
+      5474,
+      0,
+      5478,
+      1,
+      "STRING"
+    ],
+    [
+      14136,
+      5460,
+      0,
+      5478,
+      2,
+      "IMAGE"
+    ],
+    [
+      14137,
+      5418,
+      0,
+      5478,
+      3,
+      "BOOLEAN"
+    ],
+    [
+      14138,
+      5478,
+      0,
+      5425,
+      0,
+      "*"
+    ]
+  ],
+  "groups": [],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "76416b27-a158-4706-82a2-a89e803f95e1",
+        "version": 1,
+        "state": {
+          "lastGroupId": 42,
+          "lastNodeId": 5478,
+          "lastLinkId": 14139,
+          "lastRerouteId": 0
+        },
+        "revision": 0,
+        "config": {},
+        "name": "New Subgraph",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            1115.3924130541795,
+            9765.434646003814,
+            128,
+            148
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            2876.959359969793,
+            9795.434646003814,
+            128,
+            68
+          ]
+        },
+        "inputs": [
+          {
+            "id": "39416ca0-4550-4df1-b866-d2e1a6ddbc21",
+            "name": "int_",
+            "type": "INT",
+            "linkIds": [
+              14130
+            ],
+            "localized_name": "int_",
+            "pos": [
+              1219.3924130541795,
+              9789.434646003814
+            ]
+          },
+          {
+            "id": "7ac3948b-8dd0-497b-aa93-72cb3bf2c548",
+            "name": "text_a",
+            "type": "STRING",
+            "linkIds": [
+              14119,
+              14128
+            ],
+            "localized_name": "text_a",
+            "label": "Promt",
+            "shape": 7,
+            "pos": [
+              1219.3924130541795,
+              9809.434646003814
+            ]
+          },
+          {
+            "id": "81b9d200-4fc8-4a74-aa06-367a75fbe21e",
+            "name": "image",
+            "type": "IMAGE",
+            "linkIds": [
+              14131
+            ],
+            "localized_name": "image",
+            "shape": 7,
+            "pos": [
+              1219.3924130541795,
+              9829.434646003814
+            ]
+          },
+          {
+            "id": "30c8cab1-e5fc-4a3c-ac08-a1ffe8f8af4c",
+            "name": "switch",
+            "type": "BOOLEAN",
+            "linkIds": [
+              14132
+            ],
+            "localized_name": "switch",
+            "label": "switch",
+            "pos": [
+              1219.3924130541795,
+              9849.434646003814
+            ]
+          },
+          {
+            "id": "106b170d-0555-4174-8348-c288a9f6fa73",
+            "name": "seed",
+            "type": "INT",
+            "linkIds": [
+              14139
+            ],
+            "pos": [
+              1219.3924130541795,
+              9869.434646003814
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "893d2424-18d8-489b-bc73-ce67a9982512",
+            "name": "any",
+            "type": "*",
+            "linkIds": [
+              14133
+            ],
+            "localized_name": "any",
+            "pos": [
+              2900.959359969793,
+              9819.434646003814
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 5464,
+            "type": "CR Text",
+            "pos": [
+              1330.459912010173,
+              9288.102021910638
+            ],
+            "size": [
+              400,
+              200
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "text",
+                "name": "text",
+                "type": "*",
+                "links": [
+                  14122
+                ]
+              },
+              {
+                "localized_name": "show_help",
+                "name": "show_help",
+                "type": "STRING",
+                "links": []
+              }
+            ],
+            "properties": {
+              "cnr_id": "ComfyUI_Comfyroll_CustomNodes",
+              "ver": "d78b780ae43fcf8c6b7c6505e6ffb4584281ceca",
+              "Node name for S&R": "CR Text",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              "Seconds"
+            ],
+            "widgets_values_named": {
+              "text": "Seconds"
+            }
+          },
+          {
+            "id": 5467,
+            "type": "CR Integer To String",
+            "pos": [
+              1337.636279009254,
+              9581.87092374792
+            ],
+            "size": [
+              196.319921875,
+              46
+            ],
+            "flags": {},
+            "order": 6,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "int_",
+                "name": "int_",
+                "type": "INT",
+                "link": 14130
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  14121
+                ]
+              },
+              {
+                "localized_name": "show_help",
+                "name": "show_help",
+                "type": "STRING",
+                "links": []
+              }
+            ],
+            "properties": {
+              "cnr_id": "ComfyUI_Comfyroll_CustomNodes",
+              "ver": "d78b780ae43fcf8c6b7c6505e6ffb4584281ceca",
+              "Node name for S&R": "CR Integer To String",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            }
+          },
+          {
+            "id": 5465,
+            "type": "LlamaServerUnload",
+            "pos": [
+              1796.310678904785,
+              9406.405923075612
+            ],
+            "size": [
+              347.77109375,
+              106
+            ],
+            "flags": {},
+            "order": 4,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "trigger",
+                "name": "trigger",
+                "type": "STRING",
+                "link": 14117
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "trigger",
+                "name": "trigger",
+                "type": "STRING",
+                "links": [
+                  14118
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-workflow-encrypt",
+              "ver": "1.0.0",
+              "Node name for S&R": "LlamaServerUnload",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              "all_servers",
+              true,
+              7860
+            ],
+            "widgets_values_named": {
+              "target": "all_servers",
+              "also_free_comfyui_vram": true,
+              "port": 7860
+            }
+          },
+          {
+            "id": 5466,
+            "type": "DisTorchPurgeVRAMV2",
+            "pos": [
+              1792.9485969653977,
+              9147.521109424399
+            ],
+            "size": [
+              305.404296875,
+              202
+            ],
+            "flags": {},
+            "order": 5,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "anything",
+                "name": "anything",
+                "type": "*",
+                "link": 14118
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "any",
+                "name": "any",
+                "type": "*",
+                "links": [
+                  14133
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-workflow-encrypt",
+              "ver": "1.0.0",
+              "Node name for S&R": "DisTorchPurgeVRAMV2",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              true,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ],
+            "widgets_values_named": {
+              "purge_cache": true,
+              "purge_models": false,
+              "purge_seedvr2_models": false,
+              "purge_qwen3vl_models": false,
+              "purge_nunchaku_models": false,
+              "HSWQ": false,
+              "Ollama": false
+            }
+          },
+          {
+            "id": 5469,
+            "type": "LlamaVisionAdvancedOptions",
+            "pos": [
+              1515.1842789377363,
+              9657.49583063694
+            ],
+            "size": [
+              400,
+              575
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 7,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "seed",
+                "name": "seed",
+                "type": "INT",
+                "widget": {
+                  "name": "seed"
+                },
+                "link": 14139
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "advanced_options",
+                "name": "advanced_options",
+                "type": "LLAMA_VISION_OPTS",
+                "links": [
+                  14124
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-workflow-encrypt",
+              "ver": "1.0.0",
+              "Node name for S&R": "LlamaVisionAdvancedOptions",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              0.9,
+              0.9,
+              64,
+              0,
+              1,
+              0,
+              0,
+              0,
+              "fixed",
+              true,
+              "",
+              99,
+              8192,
+              0,
+              0,
+              "",
+              false,
+              60,
+              false,
+              60,
+              300,
+              true,
+              "C:\\Users\\Startklar\\Documents\\ComfyUI\\llama_server_debug.log"
+            ],
+            "widgets_values_named": {
+              "temperature": 0.9,
+              "top_p": 0.9,
+              "top_k": 64,
+              "min_p": 0,
+              "repeat_penalty": 1,
+              "presence_penalty": 0,
+              "frequency_penalty": 0,
+              "seed": 0,
+              "fixed": "fixed",
+              "disable_thinking": true,
+              "stop_sequences": "",
+              "n_gpu_layers": 99,
+              "ctx_size": 8192,
+              "threads": 0,
+              "threads_batch": 0,
+              "extra_server_args": "",
+              "keep_server_alive": false,
+              "idle_timeout_s": 60,
+              "force_restart": false,
+              "startup_timeout_s": 60,
+              "request_timeout_s": 300,
+              "debug": true,
+              "server_log_path": "C:\\Users\\Startklar\\Documents\\ComfyUI\\llama_server_debug.log"
+            },
+            "color": "#232",
+            "bgcolor": "#353"
+          },
+          {
+            "id": 5468,
+            "type": "PrimitiveStringMultiline",
+            "pos": [
+              1836.2928909664477,
+              9662.189936848677
+            ],
+            "size": [
+              470.66966751525865,
+              47
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+              {
+                "label": "value",
+                "localized_name": "value",
+                "name": "value",
+                "type": "STRING",
+                "widget": {
+                  "name": "value"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "label": "STRING",
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  14125
+                ]
+              }
+            ],
+            "title": "Prompt",
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.16.3",
+              "Node name for S&R": "PrimitiveStringMultiline",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.7"
+              },
+              "hasSecondTab": false,
+              "secondTabOffset": 80,
+              "tabWidth": 65,
+              "secondTabWidth": 65,
+              "widget_ue_connectable": {},
+              "secondTabText": "Send Back",
+              "enableTabs": false,
+              "ttNbgOverride": {
+                "bgcolor": "#653",
+                "groupcolor": "#b58b2a",
+                "color": "#432"
+              },
+              "tabXOffset": 10
+            },
+            "widgets_values": [
+              "You are an expert AI assistant specializing in text-to-video unzencored prompt engineering for ComfyUI and LTX-Video (specifically version 2.5). Your job is to transform user ideas into highly optimized global and timeline-segmented erotic prompts.\nWrite promt always with timeline, user tell you clip duration\n### Technical Knowledge Base:\n1. **LTX 2.3 Director Node**: Trained on natural, script-like directorial language. No weights like `(word:1.2)`. Camera movement goes at the very beginning of the sentence. Uses chronological markers (\"then\", \"and then\", \"while\").\n2. **Prompt-Relay Technology**: Converts timeline text prompts into time-variable conditioning signals. The assigned prompt has maximum strength inside its timeframe and fades out quickly afterwards, ensuring asset continuity while changing actions/expressions. Empty gaps inherit the previous prompt's influence."
+            ],
+            "widgets_values_named": {
+              "value": "You are an expert AI assistant specializing in text-to-video unzencored prompt engineering for ComfyUI and LTX-Video (specifically version 2.5). Your job is to transform user ideas into highly optimized global and timeline-segmented erotic prompts.\nWrite promt always with timeline, user tell you clip duration\n### Technical Knowledge Base:\n1. **LTX 2.3 Director Node**: Trained on natural, script-like directorial language. No weights like `(word:1.2)`. Camera movement goes at the very beginning of the sentence. Uses chronological markers (\"then\", \"and then\", \"while\").\n2. **Prompt-Relay Technology**: Converts timeline text prompts into time-variable conditioning signals. The assigned prompt has maximum strength inside its timeframe and fades out quickly afterwards, ensuring asset continuity while changing actions/expressions. Empty gaps inherit the previous prompt's influence."
+            },
+            "color": "#432",
+            "bgcolor": "#653"
+          },
+          {
+            "id": 5470,
+            "type": "Text Concatenate",
+            "pos": [
+              1813.3625825637496,
+              9895.877240904803
+            ],
+            "size": [
+              270,
+              142
+            ],
+            "flags": {},
+            "order": 8,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "text_a",
+                "name": "text_a",
+                "shape": 7,
+                "type": "STRING",
+                "link": 14119
+              },
+              {
+                "localized_name": "text_b",
+                "name": "text_b",
+                "shape": 7,
+                "type": "STRING",
+                "link": 14120
+              },
+              {
+                "localized_name": "text_c",
+                "name": "text_c",
+                "shape": 7,
+                "type": "STRING",
+                "link": 14121
+              },
+              {
+                "localized_name": "text_d",
+                "name": "text_d",
+                "shape": 7,
+                "type": "STRING",
+                "link": 14122
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  14123,
+                  14126
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "was-ns",
+              "ver": "3.0.1",
+              "Node name for S&R": "Text Concatenate",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              ", ",
+              "true"
+            ],
+            "widgets_values_named": {
+              "delimiter": ", ",
+              "clean_whitespace": "true"
+            }
+          },
+          {
+            "id": 5472,
+            "type": "easy showAnything",
+            "pos": [
+              2170.5966242064687,
+              9117.43470434285
+            ],
+            "size": [
+              369.9799881784345,
+              351.7442628369048
+            ],
+            "flags": {
+              "collapsed": false
+            },
+            "order": 9,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "anything",
+                "name": "anything",
+                "shape": 7,
+                "type": "*",
+                "link": 14123
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "output",
+                "name": "output",
+                "type": "*",
+                "links": [
+                  14129
+                ]
+              }
+            ],
+            "title": "Enhanced Prompt",
+            "properties": {
+              "cnr_id": "comfyui-easy-use",
+              "ver": "b11c63487243d183a967261bdf019c5afcec2cf7",
+              "Node name for S&R": "easy showAnything",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              [
+                "A medium shot from chest to wok frames a night-market chef under a corrugated tin awning, a carbon-steel wok on a roaring jet burner, a column of orange flame leaping as he tosses oil and garlic., Duration =, 20, Seconds"
+              ]
+            ],
+            "widgets_values_named": {
+              "text": [
+                "A medium shot from chest to wok frames a night-market chef under a corrugated tin awning, a carbon-steel wok on a roaring jet burner, a column of orange flame leaping as he tosses oil and garlic., Duration =, 20, Seconds"
+              ]
+            },
+            "color": "#332922",
+            "bgcolor": "#593930"
+          },
+          {
+            "id": 5473,
+            "type": "DF_Int_to_Float",
+            "pos": [
+              1421.079289961173,
+              9983.255268745539
+            ],
+            "size": [
+              270,
+              58
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 4,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "FLOAT",
+                "name": "FLOAT",
+                "type": "FLOAT",
+                "links": []
+              }
+            ],
+            "properties": {
+              "cnr_id": "derfuu_comfyui_moddednodes",
+              "ver": "1.0.1",
+              "Node name for S&R": "DF_Int_to_Float",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              1
+            ],
+            "widgets_values_named": {
+              "Value": 1
+            }
+          },
+          {
+            "id": 5475,
+            "type": "LlamaServerVisionCaption",
+            "pos": [
+              1840.9945274204417,
+              10153.43458766478
+            ],
+            "size": [
+              400,
+              418
+            ],
+            "flags": {},
+            "order": 10,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": 14131
+              },
+              {
+                "localized_name": "image_batch",
+                "name": "image_batch",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": null
+              },
+              {
+                "localized_name": "video_frames",
+                "name": "video_frames",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": null
+              },
+              {
+                "localized_name": "advanced_options",
+                "name": "advanced_options",
+                "shape": 7,
+                "type": "LLAMA_VISION_OPTS",
+                "link": 14124
+              },
+              {
+                "localized_name": "system_prompt",
+                "name": "system_prompt",
+                "type": "STRING",
+                "widget": {
+                  "name": "system_prompt"
+                },
+                "link": 14125
+              },
+              {
+                "localized_name": "user_prompt",
+                "name": "user_prompt",
+                "type": "STRING",
+                "widget": {
+                  "name": "user_prompt"
+                },
+                "link": 14126
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "caption",
+                "name": "caption",
+                "type": "STRING",
+                "links": []
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-workflow-encrypt",
+              "ver": "bd747cae0d18c7ab95ea500456f33b36202abea9",
+              "Node name for S&R": "LlamaServerVisionCaption",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              },
+              "aux_id": "cicalooo/ComfyUI-cc_llama_vision"
+            },
+            "widgets_values": [
+              "D:\\Unsloth\\C-claude\\llama.cpp\\llama-server.exe",
+              "C:\\ai_diffusion\\models\\LLM",
+              "C:\\ai_diffusion\\models\\LLM\\Qwen3-VL-4B-Instruct-abliterated.Q8_0.gguf",
+              "C:\\ai_diffusion\\models\\LLM\\mmproj-F16.gguf",
+              "",
+              "",
+              7860,
+              4000,
+              16,
+              true,
+              null
+            ],
+            "widgets_values_named": {
+              "llama_server_path": "D:\\Unsloth\\C-claude\\llama.cpp\\llama-server.exe",
+              "models_dir": "C:\\ai_diffusion\\models\\LLM",
+              "model_path": "C:\\ai_diffusion\\models\\LLM\\Qwen3-VL-4B-Instruct-abliterated.Q8_0.gguf",
+              "mmproj_path": "C:\\ai_diffusion\\models\\LLM\\mmproj-F16.gguf",
+              "system_prompt": "",
+              "user_prompt": "",
+              "port": 7860,
+              "max_tokens": 4000,
+              "max_video_frames": 16,
+              "label_video_frames": true,
+              "🔄 Refresh Models": null
+            }
+          },
+          {
+            "id": 5476,
+            "type": "easy cleanGpuUsed",
+            "pos": [
+              2535.0410423593,
+              9827.757375527077
+            ],
+            "size": [
+              161.3404296875,
+              26
+            ],
+            "flags": {},
+            "order": 11,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "anything",
+                "name": "anything",
+                "type": "*",
+                "link": 14127
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "output",
+                "name": "output",
+                "type": "*",
+                "links": [
+                  14117
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-workflow-encrypt",
+              "ver": "1.0.0",
+              "Node name for S&R": "easy cleanGpuUsed",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            }
+          },
+          {
+            "id": 5477,
+            "type": "ComfySwitchNode",
+            "pos": [
+              2546.959359969793,
+              9540.696434749027
+            ],
+            "size": [
+              270,
+              78
+            ],
+            "flags": {
+              "collapsed": false
+            },
+            "order": 12,
+            "mode": 0,
+            "inputs": [
+              {
+                "label": "on_false",
+                "localized_name": "on_false",
+                "name": "on_false",
+                "type": "*",
+                "link": 14128
+              },
+              {
+                "label": "on_true",
+                "localized_name": "on_true",
+                "name": "on_true",
+                "type": "STRING",
+                "link": 14129
+              },
+              {
+                "label": "switch",
+                "localized_name": "switch",
+                "name": "switch",
+                "type": "BOOLEAN",
+                "widget": {
+                  "name": "switch"
+                },
+                "link": 14132
+              }
+            ],
+            "outputs": [
+              {
+                "label": "output",
+                "localized_name": "output",
+                "name": "output",
+                "type": "STRING",
+                "links": [
+                  14127
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.22.0",
+              "Node name for S&R": "ComfySwitchNode",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.5.2"
+              },
+              "hasSecondTab": false,
+              "secondTabOffset": 80,
+              "tabWidth": 65,
+              "secondTabWidth": 65,
+              "widget_ue_connectable": {
+                "switch": true
+              },
+              "secondTabText": "Send Back",
+              "enableTabs": false,
+              "ttNbgOverride": {
+                "bgcolor": "#653",
+                "groupcolor": "#b58b2a",
+                "color": "#432"
+              },
+              "tabXOffset": 10
+            },
+            "widgets_values": [
+              false
+            ],
+            "widgets_values_named": {
+              "switch": false
+            },
+            "color": "#432",
+            "bgcolor": "#653"
+          },
+          {
+            "id": 5471,
+            "type": "CR Text",
+            "pos": [
+              1388.175871887846,
+              9739.713515678717
+            ],
+            "size": [
+              400,
+              200
+            ],
+            "flags": {},
+            "order": 3,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "text",
+                "name": "text",
+                "type": "*",
+                "links": [
+                  14120
+                ]
+              },
+              {
+                "localized_name": "show_help",
+                "name": "show_help",
+                "type": "STRING",
+                "links": []
+              }
+            ],
+            "properties": {
+              "cnr_id": "ComfyUI_Comfyroll_CustomNodes",
+              "ver": "d78b780ae43fcf8c6b7c6505e6ffb4584281ceca",
+              "Node name for S&R": "CR Text",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              "Duration = "
+            ],
+            "widgets_values_named": {
+              "text": "Duration = "
+            }
+          }
+        ],
+        "groups": [],
+        "links": [
+          {
+            "id": 14117,
+            "origin_id": 5476,
+            "origin_slot": 0,
+            "target_id": 5465,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 14118,
+            "origin_id": 5465,
+            "origin_slot": 0,
+            "target_id": 5466,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 14120,
+            "origin_id": 5471,
+            "origin_slot": 0,
+            "target_id": 5470,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 14121,
+            "origin_id": 5467,
+            "origin_slot": 0,
+            "target_id": 5470,
+            "target_slot": 2,
+            "type": "STRING"
+          },
+          {
+            "id": 14122,
+            "origin_id": 5464,
+            "origin_slot": 0,
+            "target_id": 5470,
+            "target_slot": 3,
+            "type": "STRING"
+          },
+          {
+            "id": 14123,
+            "origin_id": 5470,
+            "origin_slot": 0,
+            "target_id": 5472,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 14124,
+            "origin_id": 5469,
+            "origin_slot": 0,
+            "target_id": 5475,
+            "target_slot": 3,
+            "type": "LLAMA_VISION_OPTS"
+          },
+          {
+            "id": 14125,
+            "origin_id": 5468,
+            "origin_slot": 0,
+            "target_id": 5475,
+            "target_slot": 4,
+            "type": "STRING"
+          },
+          {
+            "id": 14126,
+            "origin_id": 5470,
+            "origin_slot": 0,
+            "target_id": 5475,
+            "target_slot": 5,
+            "type": "STRING"
+          },
+          {
+            "id": 14127,
+            "origin_id": 5477,
+            "origin_slot": 0,
+            "target_id": 5476,
+            "target_slot": 0,
+            "type": "*"
+          },
+          {
+            "id": 14129,
+            "origin_id": 5472,
+            "origin_slot": 0,
+            "target_id": 5477,
+            "target_slot": 1,
+            "type": "*"
+          },
+          {
+            "id": 14130,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 5467,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 14119,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 5470,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 14128,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 5477,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 14131,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 5475,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 14132,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 5477,
+            "target_slot": 2,
+            "type": "BOOLEAN"
+          },
+          {
+            "id": 14133,
+            "origin_id": 5466,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "*"
+          },
+          {
+            "id": 14139,
+            "origin_id": -10,
+            "origin_slot": 4,
+            "target_id": 5469,
+            "target_slot": 0,
+            "type": "INT"
+          }
+        ],
+        "extra": {
+          "ue_links": [],
+          "links_added_by_ue": []
+        }
+      }
+    ]
+  },
+  "config": {},
+  "extra": {
+    "ue_links": [],
+    "ds": {
+      "scale": 0.6688590790965051,
+      "offset": [
+        -1004.8668585622679,
+        -9381.441026654822
+      ]
+    },
+    "anomalous_hashes": {},
+    "frontendVersion": "1.49.6",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true,
+    "links_added_by_ue": []
+  },
+  "version": 0.4
+}

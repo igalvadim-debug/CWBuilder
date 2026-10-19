@@ -1,0 +1,1572 @@
+{
+  "id": "08988737-a544-4ab1-99fb-22d67b7c36e3",
+  "revision": 0,
+  "last_node_id": 114,
+  "last_link_id": 194,
+  "nodes": [
+    {
+      "id": 56,
+      "type": "CLIPLoader",
+      "pos": [
+        -802.9822998046875,
+        -558.072021484375
+      ],
+      "size": [
+        450,
+        170
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip_name",
+          "name": "clip_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "clip_name"
+          }
+        },
+        {
+          "label": "type",
+          "name": "type",
+          "type": "COMBO",
+          "widget": {
+            "name": "type"
+          }
+        },
+        {
+          "label": "device",
+          "name": "device",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "device"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            72,
+            109
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "directory_invalid": true,
+            "name": "qwen3vl_4b_fp8_scaled.safetensors",
+            "directory": "text_encoders",
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors"
+          }
+        ],
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "qwen3vl_4b_fp8_scaled.safetensors",
+        "krea2",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+        "type": "krea2",
+        "device": "default"
+      }
+    },
+    {
+      "id": 76,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -806.70166015625,
+        -876.005859375
+      ],
+      "size": [
+        490.1187744140625,
+        420
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 109
+        },
+        {
+          "label": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": 178
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            177
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "CLIPTextEncode",
+        "widget_ue_connectable": {
+          "text": true
+        }
+      },
+      "widgets_values": [
+        "lowres, bad anatomy, bad hands, text, error, missing fingers, \nextra digit, fewer digits, cropped, worst quality, low quality, \nnormal quality, jpeg artifacts, signature, watermark, username, \nblurry, bad feet, mutation, deformed, extra limbs, extra arms, \nextra legs, malformed limbs, fused fingers, too many fingers, \nlong neck, cross-eyed, mutated hands, polar lowres, bad face, \nout of frame, oversaturated, overexposed"
+      ],
+      "widgets_values_named": {
+        "text": "lowres, bad anatomy, bad hands, text, error, missing fingers, \nextra digit, fewer digits, cropped, worst quality, low quality, \nnormal quality, jpeg artifacts, signature, watermark, username, \nblurry, bad feet, mutation, deformed, extra limbs, extra arms, \nextra legs, malformed limbs, fused fingers, too many fingers, \nlong neck, cross-eyed, mutated hands, polar lowres, bad face, \nout of frame, oversaturated, overexposed"
+      },
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 99,
+      "type": "ConditioningZeroOut",
+      "pos": [
+        -803.824951171875,
+        -823.5049438476562
+      ],
+      "size": [
+        204.134765625,
+        26
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "conditioning",
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 177
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            176
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0",
+        "Node name for S&R": "ConditioningZeroOut",
+        "widget_ue_connectable": {}
+      },
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 51,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -800.7781372070312,
+        -928.8370361328125
+      ],
+      "size": [
+        479.23968505859375,
+        420
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 72
+        },
+        {
+          "label": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": 142
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            75
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "CLIPTextEncode",
+        "widget_ue_connectable": {
+          "text": true
+        }
+      },
+      "widgets_values": [
+        "The warrior’s thick, dark beard is coarse and tangled at the jawline with fine hairs catching light like static filaments; his hair, tied in a high ponytail, flares violently behind him as if whipped by wind or sudden motion. His skin bears deep-set creases around knuckles and brow, sunken cheeks revealing scars that ripple faintly under harsh illumination—his left ear glows with an unnatural crimson hue like embedded metal. The black gi fabric clings to his muscular frame in heavy folds: the sleeve’s weave appears coarse cotton or hemp, frayed at the cuffs where it scrapes against skin; the red obi is vibrant and saturated, its edges torn unevenly as if ripped by force, fluttering with dynamic motion like a living ribbon. His right fist grips tightly into a mallet shape—knuckles swollen from impact—with leather wraps that show wear along seams and dirt-stained fibers. The background features towering trees rendered in charcoal gray strokes; their bark textures are rough and scaly, etched by wind or time, while the ground beneath is obscured but suggests mossy earth underfoot with scattered leaves caught mid-fall. Light pours from above like shafts of watercolor wash: brilliant white beams slice through the canopy, casting long shadows that stretch diagonally across his body—soft edges blurred into mist at their ends. The camera captures him low-angle, almost head-on but slightly tilted upward; a shallow depth-of-field blurs the surrounding foliage while keeping focus razor-sharp on every muscle and fiber of his form. Leading lines radiate from tree trunks toward center-frame, guiding eyes to his raised leg—its knee bent sharply with tendon cords straining against fabric—and trailing red obi that arcs across midground like a visual anchor point between foreground trees. Negative space dominates the upper half where light floods through leaves; asymmetry is intentional: left side of frame holds more texture and detail than right, balancing tension without symmetry. The scene pulses with kinetic energy—the warrior suspended in air as if frozen during combat—his expression fierce yet focused, eyes narrowed into slits that reflect nothing but determination. Shadows fall sharply beneath his limbs like inkblots on parchment; the lighting is harsh overhead sun filtered through canopy leaves, creating high-contrast highlights along shoulders and fists while leaving crevices of darkness to emphasize power and isolation. The composition’s visual hierarchy elevates him as central icon—his red obi a bold focal point against monochrome tones. The camera lens feels like an intimate close-up: shallow"
+      ],
+      "widgets_values_named": {
+        "text": "The warrior’s thick, dark beard is coarse and tangled at the jawline with fine hairs catching light like static filaments; his hair, tied in a high ponytail, flares violently behind him as if whipped by wind or sudden motion. His skin bears deep-set creases around knuckles and brow, sunken cheeks revealing scars that ripple faintly under harsh illumination—his left ear glows with an unnatural crimson hue like embedded metal. The black gi fabric clings to his muscular frame in heavy folds: the sleeve’s weave appears coarse cotton or hemp, frayed at the cuffs where it scrapes against skin; the red obi is vibrant and saturated, its edges torn unevenly as if ripped by force, fluttering with dynamic motion like a living ribbon. His right fist grips tightly into a mallet shape—knuckles swollen from impact—with leather wraps that show wear along seams and dirt-stained fibers. The background features towering trees rendered in charcoal gray strokes; their bark textures are rough and scaly, etched by wind or time, while the ground beneath is obscured but suggests mossy earth underfoot with scattered leaves caught mid-fall. Light pours from above like shafts of watercolor wash: brilliant white beams slice through the canopy, casting long shadows that stretch diagonally across his body—soft edges blurred into mist at their ends. The camera captures him low-angle, almost head-on but slightly tilted upward; a shallow depth-of-field blurs the surrounding foliage while keeping focus razor-sharp on every muscle and fiber of his form. Leading lines radiate from tree trunks toward center-frame, guiding eyes to his raised leg—its knee bent sharply with tendon cords straining against fabric—and trailing red obi that arcs across midground like a visual anchor point between foreground trees. Negative space dominates the upper half where light floods through leaves; asymmetry is intentional: left side of frame holds more texture and detail than right, balancing tension without symmetry. The scene pulses with kinetic energy—the warrior suspended in air as if frozen during combat—his expression fierce yet focused, eyes narrowed into slits that reflect nothing but determination. Shadows fall sharply beneath his limbs like inkblots on parchment; the lighting is harsh overhead sun filtered through canopy leaves, creating high-contrast highlights along shoulders and fists while leaving crevices of darkness to emphasize power and isolation. The composition’s visual hierarchy elevates him as central icon—his red obi a bold focal point against monochrome tones. The camera lens feels like an intimate close-up: shallow"
+      },
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 78,
+      "type": "ModelSamplingAuraFlow",
+      "pos": [
+        -319.5408935546875,
+        -771.1176147460938
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 181
+        },
+        {
+          "label": "shift",
+          "name": "shift",
+          "type": "FLOAT",
+          "widget": {
+            "name": "shift"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            126
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0",
+        "Node name for S&R": "ModelSamplingAuraFlow",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        3.0000000000000004
+      ],
+      "widgets_values_named": {
+        "shift": 3.0000000000000004
+      }
+    },
+    {
+      "id": 101,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        -581.1046142578125,
+        -798.3825073242188
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 8,
+      "mode": 4,
+      "inputs": [
+        {
+          "label": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 182
+        },
+        {
+          "label": "lora_name",
+          "name": "lora_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_name"
+          }
+        },
+        {
+          "label": "strength_model",
+          "name": "strength_model",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength_model"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            181
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0",
+        "Node name for S&R": "LoraLoaderModelOnly",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "Purple_Grainy_Kr2_AM.safetensors",
+        0.5000000000000001
+      ],
+      "widgets_values_named": {
+        "lora_name": "Purple_Grainy_Kr2_AM.safetensors",
+        "strength_model": 0.5000000000000001
+      }
+    },
+    {
+      "id": 53,
+      "type": "KSampler",
+      "pos": [
+        -329.0389099121094,
+        -668.052734375
+      ],
+      "size": [
+        299.47381591796875,
+        447.8360900878906
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 126
+        },
+        {
+          "label": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 75
+        },
+        {
+          "label": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 176
+        },
+        {
+          "label": "latent_image",
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 137
+        },
+        {
+          "label": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "label": "steps",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          }
+        },
+        {
+          "label": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          }
+        },
+        {
+          "label": "sampler_name",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "sampler_name"
+          }
+        },
+        {
+          "label": "scheduler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          }
+        },
+        {
+          "label": "denoise",
+          "name": "denoise",
+          "type": "FLOAT",
+          "widget": {
+            "name": "denoise"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            78
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "KSampler",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        897626524136003,
+        "randomize",
+        8,
+        1,
+        "er_sde",
+        "simple",
+        1
+      ],
+      "widgets_values_named": {
+        "seed": 897626524136003,
+        "control_after_generate": "randomize",
+        "steps": 8,
+        "cfg": 1,
+        "sampler_name": "er_sde",
+        "scheduler": "simple",
+        "denoise": 1
+      }
+    },
+    {
+      "id": 54,
+      "type": "VAEDecode",
+      "pos": [
+        203.13360595703125,
+        -164.8634796142578
+      ],
+      "size": [
+        230,
+        100
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "samples",
+          "name": "samples",
+          "type": "LATENT",
+          "link": 78
+        },
+        {
+          "label": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 79
+        }
+      ],
+      "outputs": [
+        {
+          "label": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            188
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "VAEDecode",
+        "widget_ue_connectable": {}
+      }
+    },
+    {
+      "id": 29,
+      "type": "SaveImage",
+      "pos": [
+        -13.506718635559082,
+        -901.6292114257812
+      ],
+      "size": [
+        559.5612182617188,
+        677.8945922851562
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 188
+        },
+        {
+          "label": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "image_urls",
+          "name": "images",
+          "type": "IMAGE"
+        },
+        {
+          "label": "images",
+          "name": "images",
+          "type": "IMAGE"
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "SaveImage",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "Krea2_turbo"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "Krea2_turbo"
+      },
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 94,
+      "type": "easy showAnything",
+      "pos": [
+        -804.7678833007812,
+        -159.24435424804688
+      ],
+      "size": [
+        980.7587280273438,
+        241.08958435058594
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "anything",
+          "name": "anything",
+          "shape": 7,
+          "type": "*",
+          "link": 161
+        }
+      ],
+      "outputs": [
+        {
+          "label": "output",
+          "name": "output",
+          "type": "*"
+        }
+      ],
+      "title": "Text w/Style",
+      "properties": {
+        "cnr_id": "comfyui-workflow-encrypt",
+        "ver": "1.0.0",
+        "Node name for S&R": "easy showAnything",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "cinematic photo A blonde woman with long, tousled hair, wearing a black leather biker jacket and matching mini skirt, stands center-frame on weathered stone steps, gripping a vintage silver microphone with both hands, mouth wide open in a powerful, emotive scream as golden-hour sunlight glints off her skin and the microphone’s chrome; behind her, a live band erupts in motion — a guitarist strumming furiously, a saxophonist swaying with intensity, a drummer pounding the kit — all in black attire, sweat-slicked and focused, as the camera glides smoothly forward along the steps, tilting slightly upward to frame her as the crowd’s energy pulses behind her, distant but palpable, her legs in high-heeled boots trembling with motion, the air thick with the sound of distorted guitar, saxophone wails, and her own raw, throaty roar, no speech, only the visceral thunder of her voice and the band’s urgent rhythm, the ambient hum of amplifiers and crowd noise rising like heat waves over the marble, her expression a storm of passion and surrender, the sun casting long, sharp shadows across the scene, the architecture behind her — ornate, aged buildings with statuesque niches — bathed in the dying light of dusk, the entire moment a cinematic explosion of raw, unfiltered performance, the music’s pulse matching her breath, the camera never jerking, never cutting — just flowing, immersive, 5 seconds of pure, unbroken emotional release. . 35mm photograph, film, bokeh, professional, 4k, highly detailed"
+      ],
+      "widgets_values_named": {
+        "text": "cinematic photo A blonde woman with long, tousled hair, wearing a black leather biker jacket and matching mini skirt, stands center-frame on weathered stone steps, gripping a vintage silver microphone with both hands, mouth wide open in a powerful, emotive scream as golden-hour sunlight glints off her skin and the microphone’s chrome; behind her, a live band erupts in motion — a guitarist strumming furiously, a saxophonist swaying with intensity, a drummer pounding the kit — all in black attire, sweat-slicked and focused, as the camera glides smoothly forward along the steps, tilting slightly upward to frame her as the crowd’s energy pulses behind her, distant but palpable, her legs in high-heeled boots trembling with motion, the air thick with the sound of distorted guitar, saxophone wails, and her own raw, throaty roar, no speech, only the visceral thunder of her voice and the band’s urgent rhythm, the ambient hum of amplifiers and crowd noise rising like heat waves over the marble, her expression a storm of passion and surrender, the sun casting long, sharp shadows across the scene, the architecture behind her — ornate, aged buildings with statuesque niches — bathed in the dying light of dusk, the entire moment a cinematic explosion of raw, unfiltered performance, the music’s pulse matching her breath, the camera never jerking, never cutting — just flowing, immersive, 5 seconds of pure, unbroken emotional release. . 35mm photograph, film, bokeh, professional, 4k, highly detailed"
+      }
+    },
+    {
+      "id": 96,
+      "type": "Fast Groups Bypasser (rgthree)",
+      "pos": [
+        -2936.644287109375,
+        -985.7128295898438
+      ],
+      "size": [
+        247.2955078125,
+        130
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "label": "OPT_CONNECTION",
+          "name": "OPT_CONNECTION",
+          "type": "*"
+        }
+      ],
+      "properties": {
+        "matchColors": "",
+        "matchTitle": "",
+        "showNav": true,
+        "showAllGraphs": true,
+        "sort": "position",
+        "customSortAlphabet": "",
+        "toggleRestriction": "max one",
+        "widget_ue_connectable": {}
+      }
+    },
+    {
+      "id": 55,
+      "type": "UNETLoader",
+      "pos": [
+        -805.4669799804688,
+        -744.8953247070312
+      ],
+      "size": [
+        450,
+        140
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "unet_name",
+          "name": "unet_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "unet_name"
+          }
+        },
+        {
+          "label": "weight_dtype",
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "widget": {
+            "name": "weight_dtype"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            182
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "UNETLoader",
+        "models": [
+          {
+            "directory_invalid": true,
+            "name": "krea2_turbo_fp8_scaled.safetensors",
+            "directory": "diffusion_models",
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors"
+          }
+        ],
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "wan\\krea2Turbo18For_v2.safetensors",
+        "default"
+      ],
+      "widgets_values_named": {
+        "unet_name": "wan\\krea2Turbo18For_v2.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    {
+      "id": 57,
+      "type": "VAELoader",
+      "pos": [
+        -804.5200805664062,
+        -337.783203125
+      ],
+      "size": [
+        450,
+        120
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "vae_name",
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            79
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.25.0",
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "directory_invalid": true,
+            "name": "qwen_image_vae.safetensors",
+            "directory": "vae",
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors"
+          }
+        ],
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "Qwen_Image-VAE.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "Qwen_Image-VAE.safetensors"
+      }
+    },
+    {
+      "id": 82,
+      "type": "LoadImage",
+      "pos": [
+        -2626.653564453125,
+        -1151.1932373046875
+      ],
+      "size": [
+        384.2329406738281,
+        426.35089111328125
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "image",
+          "name": "image",
+          "type": "COMBO",
+          "widget": {
+            "name": "image"
+          }
+        },
+        {
+          "label": "upload",
+          "name": "upload",
+          "type": "IMAGEUPLOAD",
+          "widget": {
+            "name": "upload"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            191
+          ]
+        },
+        {
+          "label": "MASK",
+          "name": "MASK",
+          "type": "MASK"
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0",
+        "Node name for S&R": "LoadImage",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "vCgHJ.jpg",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "vCgHJ.jpg",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 85,
+      "type": "easy stylesSelector",
+      "pos": [
+        -1290.0648216491488,
+        -350.53444545716275
+      ],
+      "size": [
+        425,
+        500
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "positive",
+          "name": "positive",
+          "shape": 7,
+          "type": "STRING",
+          "link": 194
+        },
+        {
+          "label": "negative",
+          "name": "negative",
+          "shape": 7,
+          "type": "STRING"
+        },
+        {
+          "label": "styles",
+          "name": "styles",
+          "type": "COMBO",
+          "widget": {
+            "name": "styles"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "positive",
+          "name": "positive",
+          "type": "STRING",
+          "links": [
+            142,
+            161
+          ]
+        },
+        {
+          "label": "negative",
+          "name": "negative",
+          "type": "STRING",
+          "links": [
+            178
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-workflow-encrypt",
+        "ver": "1.0.0",
+        "Node name for S&R": "easy stylesSelector",
+        "widget_ue_connectable": {},
+        "values": [
+          "sai-photographic"
+        ]
+      },
+      "widgets_values": [
+        "fooocus_styles",
+        "sai-photographic"
+      ],
+      "widgets_values_named": {
+        "styles": "fooocus_styles",
+        "select_styles": "sai-photographic"
+      }
+    },
+    {
+      "id": 114,
+      "type": "easy cleanGpuUsed",
+      "pos": [
+        -1236.7556693339973,
+        -808.361230540092
+      ],
+      "size": [
+        161.3404296875,
+        26
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "anything",
+          "type": "*",
+          "link": 193
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "*",
+          "links": [
+            194
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-workflow-encrypt",
+        "ver": "1.0.0",
+        "Node name for S&R": "easy cleanGpuUsed"
+      }
+    },
+    {
+      "id": 84,
+      "type": "Krea2SizePreset",
+      "pos": [
+        -1783.9580078125,
+        -227.30514526367188
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "resolution",
+          "name": "resolution",
+          "type": "COMBO",
+          "widget": {
+            "name": "resolution"
+          }
+        },
+        {
+          "label": "aspect_ratio",
+          "name": "aspect_ratio",
+          "type": "COMBO",
+          "widget": {
+            "name": "aspect_ratio"
+          }
+        },
+        {
+          "label": "batch_size",
+          "name": "batch_size",
+          "type": "INT",
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "latent",
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            137
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-workflow-encrypt",
+        "ver": "1.0.0",
+        "Node name for S&R": "Krea2SizePreset",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "1K",
+        "2:3",
+        1
+      ],
+      "widgets_values_named": {
+        "resolution": "1K",
+        "aspect_ratio": "2:3",
+        "batch_size": 1
+      }
+    },
+    {
+      "id": 100,
+      "type": "YANC.MultilineString",
+      "pos": [
+        -2622.896728515625,
+        -572.306640625
+      ],
+      "size": [
+        764.513427734375,
+        194.72286987304688
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "string",
+          "name": "string",
+          "type": "STRING",
+          "widget": {
+            "name": "string"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            179
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-yanc",
+        "ver": "1445232b23f4bd6d5644e850236c042808eb9efa",
+        "Node name for S&R": "YANC.MultilineString",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "The subject’s skin has a warm, even tan with subtle sheen from studio lighting; her hair is dark brown with lighter caramel highlights, parted mid-way and falling in soft waves over one shoulder. Her lips are slightly parted as they hold the thin end of a red lace string that hangs vertically down between her legs, its fabric showing fine mesh texture and delicate stitching along the edges. The suede boots she wears have a matte finish with visible grainy texture; their zippers are black and metallic, running diagonally across the outer side from ankle to knee. Each boot features an open-toe design with cutouts around the footbed that reveal the inner sole’s patterned surface beneath. Her hands are raised behind her head, fingers interlaced in a gesture that creates natural shadows under her arms against the white backdrop. The background is pure studio white, reflecting soft light off its smooth plane and creating faint gradients near the floor where she sits. In front of her feet lies an unbroken expanse of flat surface, catching no reflections or imperfections beyond minor dust particles suspended in air beams from overhead lights. A single thin red thread drapes down between her legs like a ribbon tied around herself; it’s slightly frayed at its ends and hangs loosely due to gravity. The camera is positioned directly above eye level with slight forward tilt, capturing the full figure within medium close-up framing that blurs out any background distractions while keeping focus sharp on every curve of flesh and fabric detail. Lighting appears evenly diffused from front-left, casting soft shadows along her right side which subtly contour her anatomy without harshness or overexposure points. The depth of field is shallow enough to keep only the subject in crisp clarity with a gentle blur creeping into edges beyond waistline level; no foreground elements distract while midground remains empty and uncluttered by props, signage or other objects.\n"
+      ],
+      "widgets_values_named": {
+        "string": "The subject’s skin has a warm, even tan with subtle sheen from studio lighting; her hair is dark brown with lighter caramel highlights, parted mid-way and falling in soft waves over one shoulder. Her lips are slightly parted as they hold the thin end of a red lace string that hangs vertically down between her legs, its fabric showing fine mesh texture and delicate stitching along the edges. The suede boots she wears have a matte finish with visible grainy texture; their zippers are black and metallic, running diagonally across the outer side from ankle to knee. Each boot features an open-toe design with cutouts around the footbed that reveal the inner sole’s patterned surface beneath. Her hands are raised behind her head, fingers interlaced in a gesture that creates natural shadows under her arms against the white backdrop. The background is pure studio white, reflecting soft light off its smooth plane and creating faint gradients near the floor where she sits. In front of her feet lies an unbroken expanse of flat surface, catching no reflections or imperfections beyond minor dust particles suspended in air beams from overhead lights. A single thin red thread drapes down between her legs like a ribbon tied around herself; it’s slightly frayed at its ends and hangs loosely due to gravity. The camera is positioned directly above eye level with slight forward tilt, capturing the full figure within medium close-up framing that blurs out any background distractions while keeping focus sharp on every curve of flesh and fabric detail. Lighting appears evenly diffused from front-left, casting soft shadows along her right side which subtly contour her anatomy without harshness or overexposure points. The depth of field is shallow enough to keep only the subject in crisp clarity with a gentle blur creeping into edges beyond waistline level; no foreground elements distract while midground remains empty and uncluttered by props, signage or other objects.\n"
+      }
+    },
+    {
+      "id": 93,
+      "type": "Any Switch (rgthree)",
+      "pos": [
+        -1768.9827715543959,
+        -1103.8976847048175
+      ],
+      "size": [
+        250.95001220703125,
+        106
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "dir": 3,
+          "label": "any_01",
+          "name": "any_01",
+          "type": "STRING",
+          "link": 192
+        },
+        {
+          "dir": 3,
+          "label": "any_02",
+          "name": "any_02",
+          "type": "STRING",
+          "link": 179
+        },
+        {
+          "dir": 3,
+          "label": "any_03",
+          "name": "any_03",
+          "type": "STRING",
+          "link": 189
+        },
+        {
+          "dir": 3,
+          "label": "any_04",
+          "name": "any_04",
+          "type": "STRING"
+        },
+        {
+          "dir": 3,
+          "name": "any_05",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "dir": 4,
+          "label": "STRING",
+          "name": "*",
+          "shape": 3,
+          "type": "STRING",
+          "links": [
+            172
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "rgthree-comfy",
+        "ver": "1.0.2607232129",
+        "widget_ue_connectable": {}
+      }
+    },
+    {
+      "id": 83,
+      "type": "PreviewAny",
+      "pos": [
+        -1770.5461116327833,
+        -789.3323524084333
+      ],
+      "size": [
+        518.9258422851562,
+        389.17657470703125
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "source",
+          "name": "source",
+          "type": "*",
+          "link": 172
+        }
+      ],
+      "outputs": [
+        {
+          "label": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            193
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0",
+        "Node name for S&R": "PreviewAny",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 113,
+      "type": "AILab_QwenVL_GGUF",
+      "pos": [
+        -2163.184986175197,
+        -204.61408859843314
+      ],
+      "size": [
+        340,
+        276
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 191
+        },
+        {
+          "name": "video",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "custom_prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "custom_prompt"
+          },
+          "link": 190
+        }
+      ],
+      "outputs": [
+        {
+          "name": "RESPONSE",
+          "type": "STRING",
+          "links": [
+            189,
+            192
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-workflow-encrypt",
+        "ver": "1.0.0",
+        "Node name for S&R": "AILab_QwenVL_GGUF"
+      },
+      "widgets_values": [
+        "Qwen3-VL-4B-Instruct-c_abliterated-v2.Q8_0.gguf",
+        "🎥 LTX 2.3 NSFW I2V",
+        "",
+        8192,
+        true,
+        1105368275,
+        "randomize",
+        false
+      ],
+      "widgets_values_named": {
+        "model_name": "Qwen3-VL-4B-Instruct-c_abliterated-v2.Q8_0.gguf",
+        "preset_prompt": "🎥 LTX 2.3 NSFW I2V",
+        "custom_prompt": "",
+        "max_tokens": 8192,
+        "keep_model_loaded": true,
+        "seed": 1105368275,
+        "control_after_generate": "randomize",
+        "keep_last_prompt": false
+      },
+      "color": "#474539",
+      "bgcolor": "#2c4045"
+    },
+    {
+      "id": 90,
+      "type": "YANC.MultilineString",
+      "pos": [
+        -2614.867988037435,
+        -232.95980310956458
+      ],
+      "size": [
+        427.7484436035156,
+        343
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "string",
+          "name": "string",
+          "type": "STRING",
+          "widget": {
+            "name": "string"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "label": "STRING",
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            190
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-yanc",
+        "ver": "1445232b23f4bd6d5644e850236c042808eb9efa",
+        "Node name for S&R": "YANC.MultilineString",
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "Aphrodite, Goddess of Love and Desire \n"
+      ],
+      "widgets_values_named": {
+        "string": "Aphrodite, Goddess of Love and Desire \n"
+      }
+    }
+  ],
+  "links": [
+    [
+      72,
+      56,
+      0,
+      51,
+      0,
+      "CLIP"
+    ],
+    [
+      75,
+      51,
+      0,
+      53,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      78,
+      53,
+      0,
+      54,
+      0,
+      "LATENT"
+    ],
+    [
+      79,
+      57,
+      0,
+      54,
+      1,
+      "VAE"
+    ],
+    [
+      109,
+      56,
+      0,
+      76,
+      0,
+      "CLIP"
+    ],
+    [
+      126,
+      78,
+      0,
+      53,
+      0,
+      "MODEL"
+    ],
+    [
+      137,
+      84,
+      0,
+      53,
+      3,
+      "LATENT"
+    ],
+    [
+      142,
+      85,
+      0,
+      51,
+      1,
+      "STRING"
+    ],
+    [
+      161,
+      85,
+      0,
+      94,
+      0,
+      "*"
+    ],
+    [
+      172,
+      93,
+      0,
+      83,
+      0,
+      "*"
+    ],
+    [
+      176,
+      99,
+      0,
+      53,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      177,
+      76,
+      0,
+      99,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      178,
+      85,
+      1,
+      76,
+      1,
+      "STRING"
+    ],
+    [
+      179,
+      100,
+      0,
+      93,
+      1,
+      "STRING"
+    ],
+    [
+      181,
+      101,
+      0,
+      78,
+      0,
+      "MODEL"
+    ],
+    [
+      182,
+      55,
+      0,
+      101,
+      0,
+      "MODEL"
+    ],
+    [
+      188,
+      54,
+      0,
+      29,
+      0,
+      "IMAGE"
+    ],
+    [
+      189,
+      113,
+      0,
+      93,
+      2,
+      "STRING"
+    ],
+    [
+      190,
+      90,
+      0,
+      113,
+      2,
+      "STRING"
+    ],
+    [
+      191,
+      82,
+      0,
+      113,
+      0,
+      "IMAGE"
+    ],
+    [
+      192,
+      113,
+      0,
+      93,
+      0,
+      "STRING"
+    ],
+    [
+      193,
+      83,
+      0,
+      114,
+      0,
+      "STRING"
+    ],
+    [
+      194,
+      114,
+      0,
+      85,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Image Desc.",
+      "bounding": [
+        -2653.4580078125,
+        -1224.0460205078125,
+        839.8427734375,
+        536.0086669921875
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "Prompt Eng.",
+      "bounding": [
+        -2657.709716796875,
+        -325.2038269042969,
+        842.4563598632812,
+        582.5147094726562
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "Just Prompt",
+      "bounding": [
+        -2652.706787109375,
+        -665.1192016601562,
+        839.2899780273438,
+        316.2381286621094
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "links_added_by_ue": [],
+    "KKvideo_latentpreview": false,
+    "0246.VERSION": [
+      0,
+      0,
+      4
+    ],
+    "VHS_latentpreview": false,
+    "ds": {
+      "scale": 0.5989500000000022,
+      "offset": [
+        3269.6196360540953,
+        1420.8154430945488
+      ]
+    },
+    "VHS_KeepIntermediate": true,
+    "xzgGroups": {},
+    "VHS_MetadataImage": true,
+    "ue_links": [],
+    "KKvideo_latentpreviewrate": 0,
+    "pixaromaGroups": [],
+    "VHS_latentpreviewrate": 0,
+    "frontendVersion": "1.50.6",
+    "anomalous_hashes": {
+      "55_wan\\krea2Turbo18For_v2.safetensors": {
+        "hash": "",
+        "size": 25640200349
+      },
+      "57_Qwen_Image-VAE.safetensors": {
+        "hash": "",
+        "size": 253806246
+      }
+    }
+  },
+  "version": 0.4
+}
