@@ -1,0 +1,1099 @@
+{
+  "id": "0ae2b50b-b07a-4465-bb7c-d8fe58e8e0ac",
+  "revision": 0,
+  "last_node_id": 45,
+  "last_link_id": 56,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        -597.174062313672,
+        -116.73718961874995
+      ],
+      "size": [
+        440,
+        90
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "UNETLoader",
+        "models": [
+          {
+            "name": "flux3_image_klein_sd_bf16.safetensors",
+            "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/diffusion_models/flux3_image_klein_sd_bf16.safetensors",
+            "directory": "diffusion_models"
+          }
+        ]
+      },
+      "widgets_values": [
+        "flux3_image_klein_sd_bf16.safetensors",
+        "default"
+      ],
+      "widgets_values_named": {
+        "unet_name": "flux3_image_klein_sd_bf16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [
+        -597.174062313672,
+        43.26281038124999
+      ],
+      "size": [
+        440,
+        120
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 0,
+          "links": [
+            43
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "qwen3vl_4b_bf16.safetensors",
+            "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/text_encoders/qwen3vl_4b_bf16.safetensors",
+            "directory": "text_encoders"
+          }
+        ]
+      },
+      "widgets_values": [
+        "qwen3vl_4b_bf16.safetensors",
+        "flux3",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen3vl_4b_bf16.safetensors",
+        "type": "flux3",
+        "device": "default"
+      }
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [
+        -597.174062313672,
+        233.26281038125003
+      ],
+      "size": [
+        450,
+        70
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 0,
+          "links": [
+            5,
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "flux2-vae.safetensors",
+            "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": [
+        "flux2-vae.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "flux2-vae.safetensors"
+      }
+    },
+    {
+      "id": 4,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -87.54256318164073,
+        -129.80913335859375
+      ],
+      "size": [
+        447.39854132080086,
+        102.91335617065431
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 43
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": 55
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            20,
+            44
+          ]
+        }
+      ],
+      "title": "Positive Prompt",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "widgets_values_named": {
+        "text": ""
+      },
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 7,
+      "type": "KSampler",
+      "pos": [
+        960,
+        -170
+      ],
+      "size": [
+        344.11776684570304,
+        299.52193505859367
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 22
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 23
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 24
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        211572279914997,
+        "randomize",
+        16,
+        1,
+        "euler",
+        "simple",
+        1
+      ],
+      "widgets_values_named": {
+        "seed": 211572279914997,
+        "control_after_generate": "randomize",
+        "steps": 16,
+        "cfg": 1,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1
+      }
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [
+        1031.5942656250002,
+        279.6979296874999
+      ],
+      "size": [
+        210,
+        50
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 4
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            6
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "VAEDecode"
+      }
+    },
+    {
+      "id": 9,
+      "type": "SaveImage",
+      "pos": [
+        1413.7876064027346,
+        -208.8599559304687
+      ],
+      "size": [
+        530,
+        620
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            30
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "image_flux3_klein_distilled_image_edit"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "image_flux3_klein_distilled_image_edit"
+      }
+    },
+    {
+      "id": 10,
+      "type": "MarkdownNote",
+      "pos": [
+        -1065.3019204995962,
+        484.15564925014144
+      ],
+      "size": [
+        360,
+        270
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Notes",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## FLUX.3 image-small: editing\n\nSame files and sampler settings as text-to-image (50 steps, cfg 3.5, euler / simple).\n\n**References**: plug more input image to the `Set Reference Multi Latent` node, the first one is `<ref_image_0>` in the prompt, the next `<ref_image_1>`, and so on. Add every reference to **both** the positive and the negative, as the reference pipeline does.\n\n**Size**: the reference is scaled to ~1 MP here and the output latent takes its size. BFL's pipeline keeps references at native size (up to ~16 MP): raise the megapixels for more reference detail at a higher cost.\n\n**Prompting**: write a full caption of the result, with the edit folded in."
+      ],
+      "widgets_values_named": {
+        "text": "## FLUX.3 image-small: editing\n\nSame files and sampler settings as text-to-image (50 steps, cfg 3.5, euler / simple).\n\n**References**: plug more input image to the `Set Reference Multi Latent` node, the first one is `<ref_image_0>` in the prompt, the next `<ref_image_1>`, and so on. Add every reference to **both** the positive and the negative, as the reference pipeline does.\n\n**Size**: the reference is scaled to ~1 MP here and the output latent takes its size. BFL's pipeline keeps references at native size (up to ~16 MP): raise the megapixels for more reference detail at a higher cost.\n\n**Prompting**: write a full caption of the result, with the edit folded in."
+      },
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 11,
+      "type": "LoadImage",
+      "pos": [
+        -575.7573748781251,
+        497.80416782343747
+      ],
+      "size": [
+        440,
+        500
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            27,
+            29,
+            53
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "woman_gold_earring_teal_top_portrait.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "woman_gold_earring_teal_top_portrait.png",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 17,
+      "type": "ReferenceMultiLatent",
+      "pos": [
+        992.1999189136711,
+        498.350557260547
+      ],
+      "size": [
+        280,
+        170
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 20
+        },
+        {
+          "name": "negative",
+          "shape": 7,
+          "type": "CONDITIONING",
+          "link": 45
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": 25
+        },
+        {
+          "name": "images.image0",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 27
+        },
+        {
+          "name": "images.image1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            22
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "links": [
+            23
+          ]
+        },
+        {
+          "name": "empty_latent",
+          "type": "LATENT",
+          "links": [
+            24
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "ReferenceMultiLatent"
+      },
+      "widgets_values": [
+        "resize",
+        1
+      ],
+      "widgets_values_named": {
+        "resolution": "resize",
+        "resolution.megapixels": 1
+      },
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 18,
+      "type": "ImageCompare",
+      "pos": [
+        1415.3958077328125,
+        461.1051293672942
+      ],
+      "size": [
+        510,
+        620
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_a",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 29
+        },
+        {
+          "name": "image_b",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 30
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "ImageCompare"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 19,
+      "type": "MarkdownNote",
+      "pos": [
+        652.0263406250004,
+        28.392945703124894
+      ],
+      "size": [
+        210,
+        90
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Note: Steps",
+      "properties": {},
+      "widgets_values": [
+        "you can try 4-16 steps"
+      ],
+      "widgets_values_named": {
+        "text": "you can try 4-16 steps"
+      },
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 26,
+      "type": "MarkdownNote",
+      "pos": [
+        -1148.3004161804688,
+        -212.29887720390627
+      ],
+      "size": [
+        450,
+        650
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## Input Asset\n\n- [woman_gold_earring_teal_top_portrait.png](https://raw.githubusercontent.com/Comfy-Org/workflow_templates/refs/heads/main/input/woman_gold_earring_teal_top_portrait.png)\n\n## Model Links\n\n- [Hugging Face:black-forest-labs/flux-3-image-klein-comfy](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy)\n\n**diffusion_models**\n\n- [flux3_image_klein_sd_bf16.safetensors](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/diffusion_models/flux3_image_klein_sd_bf16.safetensors)\n\n**text_encoders**\n\n- [qwen3vl_4b_bf16.safetensors](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/text_encoders/qwen3vl_4b_bf16.safetensors)\n\n**vae**\n\n- [flux2-vae.safetensors](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors)\n\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 diffusion_models/\n│   │   └── flux3_image_klein_sd_bf16.safetensors\n│   ├── 📂 text_encoders/\n│   │   └── qwen3vl_4b_bf16.safetensors\n│   └── 📂 vae/\n│       └── flux2-vae.safetensors\n```\n\n## Report Issue\n\nNote: Please update ComfyUI first ([guide](https://docs.comfy.org/installation/update_comfyui)) and prepare required models. Desktop/Cloud updates follow stable releases, so some nightly-supported models may not be available yet.\n\n- Cannot run / runtime errors: [ComfyUI/issues](https://github.com/comfyanonymous/ComfyUI/issues)\n- UI / frontend issues: [ComfyUI_frontend/issues](https://github.com/Comfy-Org/ComfyUI_frontend/issues)\n- Workflow issues: [workflow_templates/issues](https://github.com/Comfy-Org/workflow_templates/issues)\n"
+      ],
+      "widgets_values_named": {
+        "text": "## Input Asset\n\n- [woman_gold_earring_teal_top_portrait.png](https://raw.githubusercontent.com/Comfy-Org/workflow_templates/refs/heads/main/input/woman_gold_earring_teal_top_portrait.png)\n\n## Model Links\n\n- [Hugging Face:black-forest-labs/flux-3-image-klein-comfy](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy)\n\n**diffusion_models**\n\n- [flux3_image_klein_sd_bf16.safetensors](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/diffusion_models/flux3_image_klein_sd_bf16.safetensors)\n\n**text_encoders**\n\n- [qwen3vl_4b_bf16.safetensors](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/text_encoders/qwen3vl_4b_bf16.safetensors)\n\n**vae**\n\n- [flux2-vae.safetensors](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/main/vae/flux2-vae.safetensors)\n\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 diffusion_models/\n│   │   └── flux3_image_klein_sd_bf16.safetensors\n│   ├── 📂 text_encoders/\n│   │   └── qwen3vl_4b_bf16.safetensors\n│   └── 📂 vae/\n│       └── flux2-vae.safetensors\n```\n\n## Report Issue\n\nNote: Please update ComfyUI first ([guide](https://docs.comfy.org/installation/update_comfyui)) and prepare required models. Desktop/Cloud updates follow stable releases, so some nightly-supported models may not be available yet.\n\n- Cannot run / runtime errors: [ComfyUI/issues](https://github.com/comfyanonymous/ComfyUI/issues)\n- UI / frontend issues: [ComfyUI_frontend/issues](https://github.com/Comfy-Org/ComfyUI_frontend/issues)\n- Workflow issues: [workflow_templates/issues](https://github.com/Comfy-Org/workflow_templates/issues)\n"
+      },
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 32,
+      "type": "ConditioningZeroOut",
+      "pos": [
+        128.58820244335928,
+        22.863651797656154
+      ],
+      "size": [
+        210,
+        30
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 44
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            45
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "ConditioningZeroOut"
+      }
+    },
+    {
+      "id": 33,
+      "type": "CreateBoundingBoxes",
+      "pos": [
+        -99.01802927382823,
+        504.62307317617183
+      ],
+      "size": [
+        410,
+        580
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "background",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 53
+        },
+        {
+          "name": "bboxes",
+          "shape": 7,
+          "type": "BOUNDING_BOX,ARRAY,STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "bboxes",
+          "type": "BOUNDING_BOX",
+          "links": null
+        },
+        {
+          "name": "elements",
+          "type": "ARRAY",
+          "links": [
+            54
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "CreateBoundingBoxes"
+      },
+      "widgets_values": [
+        1360,
+        752,
+        [
+          {
+            "x": 512,
+            "y": 256,
+            "width": 256,
+            "height": 256,
+            "metadata": {
+              "type": "obj",
+              "text": "",
+              "desc": "earring",
+              "palette": []
+            }
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "width": 672,
+            "height": 192,
+            "metadata": {
+              "type": "obj",
+              "text": "",
+              "desc": "A black pirate tricorn hat with a worn leather texture, sitting naturally on her head.",
+              "palette": []
+            }
+          }
+        ],
+        []
+      ],
+      "widgets_values_named": {
+        "width": 1360,
+        "height": 752,
+        "editor_state": [
+          {
+            "x": 512,
+            "y": 256,
+            "width": 256,
+            "height": 256,
+            "metadata": {
+              "type": "obj",
+              "text": "",
+              "desc": "earring",
+              "palette": []
+            }
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "width": 672,
+            "height": 192,
+            "metadata": {
+              "type": "obj",
+              "text": "",
+              "desc": "A black pirate tricorn hat with a worn leather texture, sitting naturally on her head.",
+              "palette": []
+            }
+          }
+        ],
+        "last_incoming": []
+      }
+    },
+    {
+      "id": 34,
+      "type": "PreviewAny",
+      "pos": [
+        340.99678137187493,
+        785.7419803234375
+      ],
+      "size": [
+        465.4601368807181,
+        383.9120080118181
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 56
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 35,
+      "type": "MarkdownNote",
+      "pos": [
+        948.3184537292968,
+        804.9752190632812
+      ],
+      "size": [
+        335.5755804199218,
+        374.3041911804198
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## Bounding-box editing\n\n1. **Create Bounding Boxes**: set width/height to the input image size, draw one box per element. Box 1 = `<obj_1>`, box 2 = `<obj_2>`... Describe the *result* in each box's description (colours go in the text, palettes are ignored).\n2. **FLUX.3 Layout Prompt**: write the instruction, cite `<ref_image_0>` and each `<obj_N>`, end with \"keep the rest unchanged\". It appends the boxes as JSON `[top,left,bottom,right]` on a 0-1000 grid.\n3. Its output feeds the Positive Prompt. Preview as Text shows exactly what the model gets."
+      ],
+      "widgets_values_named": {
+        "text": "## Bounding-box editing\n\n1. **Create Bounding Boxes**: set width/height to the input image size, draw one box per element. Box 1 = `<obj_1>`, box 2 = `<obj_2>`... Describe the *result* in each box's description (colours go in the text, palettes are ignored).\n2. **FLUX.3 Layout Prompt**: write the instruction, cite `<ref_image_0>` and each `<obj_N>`, end with \"keep the rest unchanged\". It appends the boxes as JSON `[top,left,bottom,right]` on a 0-1000 grid.\n3. Its output feeds the Positive Prompt. Preview as Text shows exactly what the model gets."
+      },
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 45,
+      "type": "Flux3LayoutPrompt",
+      "pos": [
+        340.99678137187493,
+        515.7419803234375
+      ],
+      "size": [
+        460,
+        220
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "element",
+          "type": "ARRAY",
+          "link": 54
+        }
+      ],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            55,
+            56
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.41.1",
+        "Node name for S&R": "Flux3LayoutPrompt"
+      },
+      "widgets_values": [
+        "In <ref_image_0>, change the small gold earring <obj_1> into a bright glossy red enamel earring of the same shape and size, attached to the same earlobe. Add a black pirate tricorn hat <obj_2> on her head. Keep the rest of the image exactly unchanged: the woman's face, hair, skin tone, teal top, background, lighting and shadows."
+      ],
+      "widgets_values_named": {
+        "prompt": "In <ref_image_0>, change the small gold earring <obj_1> into a bright glossy red enamel earring of the same shape and size, attached to the same earlobe. Add a black pirate tricorn hat <obj_2> on her head. Keep the rest of the image exactly unchanged: the woman's face, hair, skin tone, teal top, background, lighting and shadows."
+      },
+      "color": "#232",
+      "bgcolor": "#353"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      4,
+      7,
+      0,
+      8,
+      0,
+      "LATENT"
+    ],
+    [
+      5,
+      3,
+      0,
+      8,
+      1,
+      "VAE"
+    ],
+    [
+      6,
+      8,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      22,
+      17,
+      0,
+      7,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      23,
+      17,
+      1,
+      7,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      24,
+      17,
+      2,
+      7,
+      3,
+      "LATENT"
+    ],
+    [
+      29,
+      11,
+      0,
+      18,
+      0,
+      "IMAGE"
+    ],
+    [
+      30,
+      9,
+      0,
+      18,
+      1,
+      "IMAGE"
+    ],
+    [
+      43,
+      2,
+      0,
+      4,
+      0,
+      "CLIP"
+    ],
+    [
+      44,
+      4,
+      0,
+      32,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      53,
+      11,
+      0,
+      33,
+      0,
+      "IMAGE"
+    ],
+    [
+      20,
+      4,
+      0,
+      17,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      45,
+      32,
+      0,
+      17,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      25,
+      3,
+      0,
+      17,
+      2,
+      "VAE"
+    ],
+    [
+      27,
+      11,
+      0,
+      17,
+      3,
+      "IMAGE"
+    ],
+    [
+      54,
+      33,
+      2,
+      45,
+      0,
+      "ARRAY"
+    ],
+    [
+      55,
+      45,
+      0,
+      4,
+      1,
+      "STRING"
+    ],
+    [
+      56,
+      45,
+      0,
+      34,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Models",
+      "bounding": [
+        -617.174062313672,
+        -216.73718961874997,
+        490,
+        610
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "Prompt",
+      "bounding": [
+        -99.32069599414069,
+        -209.07934038984374,
+        478.5891093749999,
+        303.6620312499999
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "Sampling",
+      "bounding": [
+        900,
+        -240,
+        460,
+        610
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "Plug more reference images here",
+      "bounding": [
+        902.1999189136711,
+        408.350557260547,
+        450,
+        320
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 5,
+      "title": "Reference Image",
+      "bounding": [
+        -616.75415625,
+        412.0621875,
+        1485.8455043867186,
+        783.7048830621095
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5131581182307067,
+      "offset": [
+        1532.3934221139784,
+        825.0941389205204
+      ]
+    },
+    "frontendVersion": "1.55.17",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4,
+  "seed_widgets": {
+    "7": 0
+  }
+}
