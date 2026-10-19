@@ -17,10 +17,12 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import os
 import random
 import re
 import shutil
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -29,7 +31,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mm_common import Catalog, ModelMissing, combo_options, http_json
+from mm_common import Catalog, KIND_DIRS, EXTS, ModelMissing, combo_options, http_json
+from mm_scenes import describe_trigger_name
 
 
 class Unsupported(Exception):
@@ -1161,6 +1164,191 @@ def stage_image(path_str: str, tgt: dict, upload: bool) -> str:
         return name
     print(f"[!] ComfyUI-input-Ordner nicht gefunden - kopiere '{path.name}' selbst nach ComfyUI\\input", file=sys.stderr)
     return path.name
+
+
+# ───────────────────────────── Modell-Registry (docs/models.txt) ─────────────────────────────
+
+MODELS_TXT = Path(__file__).resolve().parent.parent / "docs" / "models.txt"
+_registry_lock = threading.Lock()
+
+# Standard-Diffusionsmodell der MOSS-Modi (Default, wenn nichts gewaehlt ist).
+MOSS_DEFAULT_UNET = "moss_image_sft_int8_convrot.safetensors"
+
+# Zusatz-Stichwoerter je Modus fuer den LoRA-Vorschlag (zusaetzlich zum UNET-Namen).
+LORA_MODE_HINTS = {
+    "klein9b": ["flux2", "klein", "9b"],
+    "klein4b": ["flux2", "klein", "4b"],
+    "qwen21": ["qwen"],
+    "qwen-edit": ["qwen"],
+    "krea2": ["krea2", "krea"],
+    "zimage": ["z-image", "zimage"],
+    "flux3": ["flux3", "flux"],
+    "moss_t2i": ["moss"],
+    "moss_inpaint": ["moss"],
+    "moss_detailer": ["moss"],
+    "moss_4step": ["moss", "rapid"],
+}
+
+
+def registry_roots() -> list[Path]:
+    """Modellwurzeln aus config.json (image+video, ohne Duplikate) als Pfade liefern."""
+    import mm_common as C
+    cfg = C.load_config()
+    out: list[Path] = []
+    for name in ("image", "video"):
+        for r in C.target(cfg, name).get("model_roots", []):
+            p = C.abspath(r)
+            if p not in out:
+                out.append(p)
+    return out
+
+
+def _reg_norm(s: str) -> str:
+    return s.replace("\\", "/").lower()
+
+
+def _reg_family(rel: str) -> str:
+    """Grob-Familie eines relativen Pfads fuer den LoRA-Vorschlag ('flux2_klein_9b')."""
+    parts = [p.lower() for p in rel.replace("\\", "/").split("/")[:-1]]
+    return "_".join(parts[-1:]) if parts else ""
+
+
+def _reg_line(path: Path, root: Path) -> str | None:
+    """Eine models.txt-Zeile fuer eine Modelldatei bauen; Trigger aus alter Zeile uebernehmen."""
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return None
+    full = str(path.resolve())
+    trig = ""
+    if MODELS_TXT.exists():
+        for ln in MODELS_TXT.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if _reg_norm(ln.split("  \u2192  ")[0]) == _reg_norm(full):
+                i = ln.find("\u2192")
+                if i >= 0:
+                    trig = ln[i:].strip()
+                break
+    line = full.replace("/", "\\")
+    if trig:
+        line += "  " + trig
+    return line
+
+
+def scan_model_registry(roots=None) -> dict:
+    """Modelldateien der ComfyUI-Roots scannen und docs/models.txt aktualisieren.
+
+    Neue Dateien werden ergaenzt, verschwundene entfernt; manuell gepflegte
+    Trigger-Anhaenge (\u2192 Trigger: ...) bleiben erhalten. Liefert
+    {'added': n, 'removed': n, 'total': n, 'path': str}.
+
+    Sicherheit: Wenn kein Root existiert (z.B. fremde Maschine oder Tests), wird
+    die bestehende Liste unveraendert gelassen - ein leerer Scan loescht nichts.
+    """
+    roots = [Path(r) for r in (roots or registry_roots())]
+    found: dict[str, str] = {}   # norm-Pfad -> fertige Zeile
+    scanned_dirs = 0
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for kind, subs in KIND_DIRS.items():
+            for sub in subs:
+                base = root / sub
+                if not base.is_dir():
+                    continue
+                scanned_dirs += 1
+                for dp, _dn, fns in os.walk(base):
+                    for f in fns:
+                        if Path(f).suffix.lower() not in EXTS:
+                            continue
+                        p = Path(dp) / f
+                        line = _reg_line(p, root)
+                        if line is not None:
+                            found[_reg_norm(line.split("  \u2192  ")[0])] = line
+    with _registry_lock:
+        old_lines = []
+        if MODELS_TXT.exists():
+            old_lines = MODELS_TXT.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if not scanned_dirs:
+            return {"added": 0, "removed": 0,
+                    "total": len([l for l in old_lines if l.strip()]),
+                    "path": str(MODELS_TXT), "skipped": True}
+        keep: list[str] = []
+        seen: set[str] = set()
+        for ln in old_lines:
+            key = _reg_norm(ln.split("  \u2192  ")[0])
+            if key in found and key not in seen:
+                keep.append(found[key])
+                seen.add(key)
+        added = 0
+        new_entries: list[str] = []
+        for key, line in found.items():
+            if key not in seen:
+                new_entries.append(line)
+                added += 1
+        removed = len([l for l in old_lines if l.strip()]) - len(keep)
+        text = "\n".join(keep + sorted(new_entries, key=str.lower)) + ("\n" if keep or new_entries else "")
+        MODELS_TXT.parent.mkdir(parents=True, exist_ok=True)
+        MODELS_TXT.write_text(text, encoding="utf-8")
+    return {"added": added, "removed": max(removed, 0),
+            "total": len(keep) + len(new_entries), "path": str(MODELS_TXT)}
+
+
+def load_models_txt(path=None) -> list[dict]:
+    """docs/models.txt lesen -> [{'full','root','rel','family','trigger'}]."""
+    p = Path(path) if path else MODELS_TXT
+    out: list[dict] = []
+    if not p.exists():
+        return out
+    roots = sorted((str(r.resolve()).replace("\\", "/") for r in registry_roots()), key=len, reverse=True)
+    for raw in p.read_text(encoding="utf-8", errors="ignore").splitlines():
+        raw = raw.strip()
+        if not raw or raw.startswith("#"):
+            continue
+        full, _, tail = raw.partition("  \u2192  ")
+        norm = _reg_norm(full)
+        root = next((r for r in roots if norm.startswith(r.rstrip("/") + "/")), "")
+        rel = norm[len(root) + 1:] if root else norm.split("/")[-1]
+        fam = _reg_family(rel)
+        out.append({"full": full.replace("\\", "/"), "root": root, "rel": rel,
+                    "family": fam, "trigger": tail.strip()})
+    return out
+
+
+def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> list[tuple]:
+    """Passende LoRAs zum Modus/Diffusionsmodell vorschlagen -> [(Dropdown-Label, Pfad)] ."""
+    es = entries if entries is not None else load_models_txt()
+    needle = _reg_norm(unet_choice.rsplit("/", 1)[-1]) if unet_choice else \
+        _reg_norm(MOSS_DEFAULT_UNET)
+    toks = [t for t in re.split(r"[^a-z0-9]+", needle) if len(t) >= 3][:4]
+    toks += [t for t in LORA_MODE_HINTS.get(mode, []) if t not in toks]
+    hits: list[tuple] = []
+    seen_labels: set[str] = set()
+    for e in es:
+        if "/loras/" not in _reg_norm(e["full"]):
+            continue
+        low = _reg_norm(e["rel"])
+        score = sum(1 for t in toks if t in low)
+        if not score and e["family"] and any(t in e["family"] for t in toks):
+            score = 1
+        if not score:
+            continue
+        label = e["rel"].rsplit("/", 1)[-1]
+        if e["family"]:
+            label = f"{e['family']}/{label}"
+        trig = describe_trigger_name(label)
+        tail = e["trigger"]
+        if tail.startswith("Trigger:"):
+            tail = tail[len("Trigger:"):].strip()
+        if tail and tail not in ("–", "(kein Trigger)"):
+            label += f"  [{tail}]"
+        elif trig:
+            label += f"  [{trig}]"
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        hits.append((score, -len(low), label, e))
+    hits.sort(key=lambda x: (-x[0], -x[1], x[2].lower()))
+    return [(h[2], h[3]["full"]) for h in hits[:60]]
 
 
 # ───────────────────────────── Ausfuehrung ─────────────────────────────
