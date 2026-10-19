@@ -1,3 +1,15 @@
 __pycache__/
 *.pyc
 testmodels/
+
+*.safetensors
+
+/venv
+
+/promts
+12
+__pycache__/
+
+*.pyc
+
+testmodels/
