@@ -1,0 +1,16 @@
+{
+  "mode": "moss_t2i",
+  "aspect": "1:1 (Square)",
+  "mp": 0.5,
+  "duration": 8,
+  "fps": 24,
+  "steps": 0,
+  "seed": -1,
+  "turbo": false,
+  "run": false,
+  "negative": "unrealistic, jpeg artifacts, bad hands, cartoon, blurry, text, cloned face, missing limbs, bad eyes, uneven eyes, mismatched eyes, cross eyed, lazy eye, unrealistic eyes, ,,, anime, manga, disney, anal anime, manga, Disney, cartoon, low resolution, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name, anime, cartoon, rawing, illustration, boring, 3d render, long neck, out of frame, extra fingers mutation, deformed, canvas frame, high contrast:1.2, over saturated:1.2, glossy:1.1, bad lighting, deformed, text, bad lighting, deformed, text, worst quality, bad lighting, cropped, blurry, low-quality, deformed, text, poorly drawn, bad art, bad angle, boring, low-resolution, worst quality, bad composition, terrible lighting, bad anatomy, worst quality, bad lighting, cropped, blurry, low-quality, deformed, text, poorly drawn, bad art, bad angle, boring, low-resolution, worst quality, bad composition, terrible lighting, bad anatomy, worst quality, bad lighting, cropped, blurry, low-quality, deformed, text, poorly drawn, bad art, bad angle, boring, low-resolution, worst quality, bad composition, terrible lighting, bad anatomy, child, childlike, children, underage, <young child>, junior, hands, fingers, arms, cup, mug, glass, drink, holding object, cluttered background, airbrushed, supermodel, plastic skin, beautiful, pretty, model, supermodel, perfect, airbrushed, flawless skin, symmetrical, makeup, professional, studio, sexy, hot, young, smooth skin",
+  "custom_test": "value",
+  "unet": "moss_image_sft_int8_convrot.safetensors",
+  "clip": "qwen3.5_9b_int8_convrot.safetensors",
+  "vae": "flux2_vae.safetensors"
+}

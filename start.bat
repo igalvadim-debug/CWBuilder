@@ -45,7 +45,7 @@ set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 echo Starte Gradio UI (mm.py ui)...
 echo Interpreter: %PYEXE%
-"%PYEXE%" mm.py ui %*
+"%PYEXE%" src\mm.py ui %*
 exit /b 0
 
 :comfy
@@ -81,7 +81,7 @@ set "PYEXE=venv\Scripts\python.exe"
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 echo Pruefe alle Modi gegen vorhandene Modelle...
-"%PYEXE%" mm.py check %*
+"%PYEXE%" src\mm.py check %*
 pause
 exit /b 0
 
@@ -91,4 +91,4 @@ echo Fuehren Sie zuerst die Installation aus: start.bat install
 pause
 exit /b 1
 
-endlocal
+endlocal    
