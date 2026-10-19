@@ -3,7 +3,7 @@ rem CWBuilder — Installation der Python-Umgebung (Windows).
 rem 1) Interpreter: vorhandener venv -> Python 3.12 -> py -3.12 -> python,
 rem 2) Ruft install.py auf: venv ./venv + requirements.txt + Modelle prüfen,
 rem 3) Nach Installation: start.bat starten.
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
 cd /d "%~dp0"
 title CWBuilder install
@@ -17,44 +17,56 @@ if not exist "%~dp0install.py" (
     exit /b 1
 )
 
-rem Installations-Interpreter: vorhandener venv -> CPython 3.12 -> py -> python.
-rem --- venv vorhanden: direkt damit install.py aufrufen (Zeile unten ist der Aufruf).
+rem Installations-Interpreter: venv (geprueft) -> lokale 3.12 -> py -3.12 (geprueft) -> python aus PATH.
+rem PYPYEXE = ausfuehrbare Datei (wird immer quoted aufgerufen), PYARGS = optionale Argumente (z.B. -3.12).
+set "VERCHK=import sys; sys.exit(0 if sys.version_info ^>= (3, 12) else 1)"
+
+rem --- venv vorhanden: nur verwenden, wenn er wirklich startet und Python >= 3.12 meldet.
 if exist "%~dp0venv\Scripts\python.exe" (
-    set "PYPATH="%~dp0venv\Scripts\python.exe""
-    goto exec
+    "%~dp0venv\Scripts\python.exe" -c "%VERCHK%" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYPYEXE=%~dp0venv\Scripts\python.exe"
+        set "PYARGS="
+        goto exec
+    )
 )
-"%~dp0venv\Scripts\python.exe" install.py %*
 
 rem Bekannte lokale Python 3.12 Installationen (wird zuerst geprüft).
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
-    set "PYPATH=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-    goto run
+    set "PYPYEXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    set "PYARGS="
+    goto exec
 )
 if exist "C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe" (
-    set "PYPATH=C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe"
-    goto run
+    set "PYPYEXE=C:\Users\Startklar\AppData\Local\Programs\Python\Python312\python.exe"
+    set "PYARGS="
+    goto exec
 )
 
-rem Fallback: py-Launcher sucht Python 3.12 (keine hartkodierten Pfade mehr).
-set "PYPATH="
+rem Fallback: py-Launcher — erst pruefen, ob 3.12 wirklich installiert ist.
 where py >nul 2>&1
-if not errorlevel 1 set "PYPATH=py -3.12"
-if defined PYPATH goto run
+if errorlevel 1 goto path_python
+py -3.12 -c "%VERCHK%" >nul 2>&1
+if not errorlevel 1 (
+    set "PYPYEXE=py"
+    set "PYARGS=-3.12"
+    goto exec
+)
+
+:path_python
 rem Letzter Ausweg: python aus PATH — erst Version pruefen, dann installieren.
 where python >nul 2>&1
 if errorlevel 1 goto no_python
-python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
+python -c "%VERCHK%" >nul 2>&1
 if errorlevel 1 goto bad_python
-set "PYPATH=python"
+set "PYPYEXE=python"
+set "PYARGS="
 
-:run
-echo === CWBuilder Installation (alles lokal in diesem Ordner) ===
-rem %PYPATH% ist entweder ein quoted Pfad, "py -3.12" oder "python";
-rem call handhabt alles drei. Der Zielpfad von cd /d endet auf "\" —
-rem "%~dp0." verhindert einen doppelten Backslash ("...\\"), der sonst
-rem Windows-Fehler wie "No Python at '...'" ausloest.
 :exec
-call %PYPATH% "%~dp0.\install.py" %*
+echo === CWBuilder Installation (alles lokal in diesem Ordner) ===
+rem Der Zielpfad von cd /d endet auf "\" — "%~dp0." verhindert einen doppelten
+rem Backslash ("...\\"), der sonst Windows-Fehler wie "No Python at '...'" ausloest.
+call "!PYPYEXE!" !PYARGS! "%~dp0.\install.py" %*
 
 if errorlevel 1 (
     echo.
@@ -81,7 +93,7 @@ pause
 exit /b 1
 
 :bad_python
-echo [fail] Python in PATH gefunden, aber Version < 3.12 — nicht unterstützt.
+echo [fail] Python in PATH gefunden, aber Version ^< 3.12 — nicht unterstützt.
 echo        Installieren Sie Python 3.12+ (https://python.org), oder geben Sie explizit an:
 echo            python install.py --python "C:\Pfad\zu\python3.12.exe"
 pause

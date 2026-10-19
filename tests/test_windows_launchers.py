@@ -21,14 +21,44 @@ def section(text, label):
 
 
 class CWBuilderLauncherContractTests(unittest.TestCase):
-    def test_install_bat_runs_install_py_with_venv_python(self):
+    def test_install_bat_validates_venv_before_using_it(self):
         text = commands("install.bat")
-        # Should call venv Python with install.py
-        self.assertIn('"%~dp0venv\\Scripts\\python.exe" install.py', text)
-        # Should forward all arguments
-        self.assertIn("%*", text)
+        # The venv branch must probe the interpreter, not trust mere existence.
+        self.assertIn('if exist "%~dp0venv\\Scripts\\python.exe" (', text)
+        self.assertIn('"%~dp0venv\\Scripts\\python.exe" -c "%VERCHK%" >nul 2>&1', text)
+        # Selection happens only when the probe succeeds.
+        self.assertIn('set "PYPYEXE=%~dp0venv\\Scripts\\python.exe"', text)
         # Should check Python version
-        self.assertIn("sys.version_info >= (3, 12)", text)
+        self.assertIn("sys.version_info ^>= (3, 12)", text)
+
+    def test_install_bat_has_no_unconditional_venv_invocation(self):
+        text = commands("install.bat")
+        # Direct invocation outside the guarded discovery block was removed.
+        self.assertNotIn('"%~dp0venv\\Scripts\\python.exe" install.py', text)
+
+    def test_install_bat_single_common_execution_path(self):
+        text = commands("install.bat")
+        exec_section = section(text, "exec")
+        # Every discovered interpreter runs through one quoted common launcher.
+        self.assertEqual(text.count(":exec"), 1)
+        self.assertIn('call "!PYPYEXE!" !PYARGS! "%~dp0.\\install.py" %*', exec_section)
+        # Should forward all arguments
+        self.assertIn("%*", exec_section)
+
+    def test_install_bat_probes_py_launcher_before_selecting_it(self):
+        text = commands("install.bat")
+        # py -3.12 is selected only after a successful probe.
+        self.assertIn("py -3.12 -c \"%VERCHK%\" >nul 2>&1", text)
+        self.assertIn('set "PYPYEXE=py"', text)
+        self.assertIn('set "PYARGS=-3.12"', text)
+        # If 3.12 is missing, discovery continues to PATH-based python.
+        self.assertIn(":path_python", text)
+        self.assertLess(text.index("py -3.12 -c"), text.index(":path_python"))
+
+    def test_install_bat_escapes_version_message(self):
+        text = commands("install.bat")
+        bad_python_section = section(text, "bad_python")
+        self.assertIn("Version ^< 3.12", bad_python_section)
 
     def test_start_bat_menu_has_required_options(self):
         text = commands("start.bat")
