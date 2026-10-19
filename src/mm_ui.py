@@ -566,9 +566,16 @@ def build_ui() -> gr.Blocks:
 
         last_mode = {"m": st["mode"]}   # zuletzt angewendeter Modus ( fuer apply_mode )
 
-        def apply_mode(m, u, c, v):
-            """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern."""
+        def apply_mode(*a):
+            """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern.
+
+            Ruft Gradio mit weniger Argumenten auf (z. B. nur [mode]), werden
+            u/c/v als None ergaenzt; mit mehr Argumenten (signatures.update())
+            werden die zusaetzlichen ignoriert - so passt die Signatur immer.
+            """
             import mm_images as I
+            m = a[0]
+            u, c, v = (list(a[1:]) + [None, None, None])[:3]
             vis = layout_for(m)
             save_state({"mode": m})
             # Moduswechsel: aus dem vorherigen Modus uebernommene Encoder-/VAE-
@@ -583,6 +590,8 @@ def build_ui() -> gr.Blocks:
                        prefer=I.default_unet_for(m))
             sel_u = uu.get("value") if isinstance(uu, dict) else None
             picks = lora_suggestions(m, sel_u or u)
+            # Explizit fuer diesen Modus gewaehlte Encoder/VAE bleiben erhalten;
+            # leer/unbekannt/uebernommen -> Default des Modus (combo 'prefer').
             clip_cur = None if mode_changed else c
             vae_cur = None if mode_changed else v
             cc = combo(tgt_name, "text_encoders", needle_u, clip_cur,
