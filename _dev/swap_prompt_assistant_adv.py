@@ -56,7 +56,7 @@ NOTE_TEXT = (
     "(CPU/RAM, not ComfyUI VRAM) and unloads it right after.\n\n"
     "WIRING\n"
     "- 16e Raw idea (PrimitiveStringMultiline) -> ADV input 'Promt' (text_a)\n"
-    "- 16c Clip length (PrimitiveInt, seconds) -> ADV input 'int_'\n"
+    "- 16c Clip length (PrimitiveInt, frames) -> ADV input 'int_'\n"
     "- 19 Reference Media first_frame          -> ADV input 'image'\n"
     "- 16f Enhance ON/OFF                      -> ADV input 'switch'\n"
     "- 16b System Prompt literal (muted)       = format rules to paste into the\n"
@@ -123,11 +123,45 @@ class Linker:
         return lid
 
 
+def _load_json(path):
+    p = Path(path)
+    try:
+        text = p.read_text(encoding="utf-8-sig")  # utf-8-sig also handles plain UTF-8
+    except FileNotFoundError:
+        sys.exit(
+            f"[error] файл не найден: {p}\n"
+            f"         Укажите путь к workflow JSON, например:\n"
+            f'         python "{Path(__file__).name}" "D:\\ComfyUi2\\scriptWorkflow\\H3_LongForge_FL2VA_REF2VA_v6.5 (2).json"'
+        )
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        sys.exit(f"[error] {p} не является корректным JSON-файлом: {e}")
+
+
 def main(src, dst):
-    adv = json.loads(Path(ADV_TEMPLATE).read_text(encoding="utf-8"))
+    src_p, dst_p = Path(src), Path(dst)
+    if not src_p.exists():
+        sys.exit(
+            f"[error] входной файл не найден: {src_p}\n"
+            f"         Запустите скрипт с путём к вашему workflow JSON, например:\n"
+            f'         python swap_prompt_assistant_adv.py "H3_LongForge_FL2VA_REF2VA_v6.5 (2).json"\n'
+            f"         (можно перетащить .json файл прямо на окно скрипта / использовать перетаскивание на bat-файл)"
+        )
+    if src_p.resolve() == dst_p.resolve():
+        # in-place mode: work on a temp copy first so the original stays intact
+        # if anything goes wrong mid-way.
+        tmp = dst_p.with_suffix(".tmp.json")
+        main(src, tmp)
+        dst_p.write_text(tmp.read_text(encoding="utf-8"), encoding="utf-8")
+        tmp.unlink()
+        print(f"[ok] updated in place {dst}")
+        return
+
+    adv = _load_json(ADV_TEMPLATE)
     sub = adv["definitions"]["subgraphs"][0]
 
-    g = json.loads(Path(src).read_text(encoding="utf-8"))
+    g = _load_json(src)
     byid = {n["id"]: n for n in g["nodes"]}
 
     # ids of every subgraph definition that looks like the ADV prompt enhancer.
@@ -145,10 +179,38 @@ def main(src, dst):
 
     target_sig = _sig(sub)
     defs = g.setdefault("definitions", {}).setdefault("subgraphs", [])
-    adv_sub_ids = {sd["id"] for sd in defs if _sig(sd) == target_sig or _is_adv(sd)}
+    # Only count definitions that are actually INSTANTIATED by some node in this
+    # workflow as existing ADV instances. Unused copies of the enhancer (the user
+    # pasting the same subgraph into other workflows in the same ComfyUI session)
+    # share the identical content signature - matching those would make us adopt
+    # a foreign definition and never wire our own.
+    node_types = {n.get("type") for n in g["nodes"]}
+    adv_sub_ids = {sd["id"] for sd in defs
+                   if (_sig(sd) == target_sig or _is_adv(sd)) and sd["id"] in node_types}
 
     # ---- 1. locate the native assistant pair and delete it -------------------
     assistants = find_nodes(g, {"LongForgePromptAssistant"})
+
+    # Idempotency: a previous run already created the tidy 16b..16f feeders and
+    # wired them into the ADV instance. Remember them (ids/positions/widgets)
+    # BEFORE deleting the assistant area - they sit inside the "Prompt Assistant"
+    # group and would otherwise be swept away as leftovers - then drop them so
+    # section 3 can rebuild them in place with the same ids. Re-runs therefore
+    # produce byte-identical graphs instead of stacking duplicates.
+    def _find_by_title(prefix):
+        return next((n for n in g["nodes"] if (n.get("title") or "").startswith(prefix)), None)
+
+    prev = {k: _find_by_title(f"16{k}") for k in "bcdef"}
+    prev_pos = {k: (list(n["pos"]), list(n["size"])) for k, n in prev.items() if n is not None}
+    prev_widgets, prev_links = {}, {}
+    for k, n in prev.items():
+        if n is not None:
+            prev_widgets[k] = copy.deepcopy(n.get("widgets_values"))
+            # remember which link ids fed these feeders before dropping them;
+            # after drop_node those ids are free and get reused on re-runs.
+            prev_links[k] = [i.get("link") for i in n.get("inputs", [])]
+            drop_node(g, n["id"])
+
     if not assistants:
         print("[warn] no LongForgePromptAssistant found - nothing removed")
     clip_ids = set()
@@ -235,8 +297,14 @@ def main(src, dst):
         # the user maintains); just remember its id. Rewriting a subgraph type
         # without fixing inputs[].link_id would break the instance.
         sub = next(sd for sd in defs if sd["id"] == inst["type"])
+
+    # (the tidy 16b..16f feeders were already captured into `prev` and dropped
+    # in section 1, before the assistant area was swept)
+    byid = {n["id"]: n for n in g["nodes"]}
+
     if inst is None:
-        nid = max(byid) + 1
+        nid = max(byid) + 1 if byid else 1
+        base0 = nid
         inst = {
             "id": nid, "type": sub["id"], "pos": [230, 1180], "size": [230, 140],
             "flags": {}, "order": 4, "mode": 0,
@@ -254,6 +322,8 @@ def main(src, dst):
         }
         g["nodes"].append(inst)
         byid[nid] = inst
+    else:
+        base0 = max(byid)          # keep numbering stable on re-runs
     inst["title"] = "16 · Promt Enhancer ADV (llama.cpp)"
     for inp in inst["inputs"]:
         if inp.get("name") == "image":
@@ -263,40 +333,52 @@ def main(src, dst):
         defs.append(copy.deepcopy(sub))
 
     # ---- 3. helper nodes -----------------------------------------------------
-    base = max(byid)
-    lit_id, dur_id, show_id, idea_id = base + 1, base + 2, base + 3, base + 4
+    # deterministic ids: fresh block above everything, or the exact ids the
+    # previous run used (prev holds the dropped old feeder nodes).
+    lit_id  = prev["b"]["id"] if prev["b"] else base0 + 1
+    dur_id  = prev["c"]["id"] if prev["c"] else base0 + 2
+    show_id = prev["d"]["id"] if prev["d"] else base0 + 3
+    idea_id = prev["e"]["id"] if prev["e"] else base0 + 4
+    en_id   = prev["f"]["id"] if prev["f"] else base0 + 5
     # NOTE: the raw idea goes into the subgraph as `text_a` (the part the LLM has
     # to rewrite); the enhancer's own system prompt stays inside the subgraph.
 
+    def _place(k, pos, size):
+        return (prev_pos[k][0], prev_pos[k][1]) if k in prev_pos else (pos, size)
+
     node_lit = {
-        "id": lit_id, "type": "String Literal", "pos": [-760, 1120], "size": [420, 320],
+        "id": lit_id, "type": "String Literal", "pos": _place("b", [-760, 1120], None)[0],
+        "size": _place("b", None, [420, 320])[1],
         "flags": {}, "order": 0, "mode": 0, "inputs": [],
         "title": "16b · System Prompt (format rules)",
         "outputs": [{"name": "STRING", "type": "STRING", "slot_index": 0, "links": [], "label": "System Prompt"}],
         "properties": {**props(ver="0.39.2"), "Node name for S&R": "String Literal"},
-        "widgets_values": [SYSTEM_PROMPT],
+        "widgets_values": prev_widgets.get("b") or [SYSTEM_PROMPT],
     }
     node_idea = {
-        "id": idea_id, "type": "PrimitiveStringMultiline", "pos": [-760, 1470], "size": [420, 260],
+        "id": idea_id, "type": "PrimitiveStringMultiline", "pos": _place("e", [-760, 1470], None)[0],
+        "size": _place("e", None, [420, 260])[1],
         "flags": {}, "order": 1, "mode": 0,
         "title": "16e · Raw idea (your text)",
         "inputs": [{"label": "value", "name": "value", "type": "STRING",
                     "widget": {"name": "value"}, "link": None}],
         "outputs": [{"name": "STRING", "type": "STRING", "slot_index": 0, "links": []}],
         "properties": {**props(ver="0.16.3"), "Node name for S&R": "PrimitiveStringMultiline"},
-        "widgets_values": [RAW_IDEA_TEXT],
+        "widgets_values": prev_widgets.get("e") or [RAW_IDEA_TEXT],
     }
     node_dur = {
-        "id": dur_id, "type": "PrimitiveInt", "pos": [-760, 1760], "size": [210, 90],
+        "id": dur_id, "type": "PrimitiveInt", "pos": _place("c", [-760, 1760], None)[0],
+        "size": _place("c", None, [210, 90])[1],
         "flags": {}, "order": 2, "mode": 0,
-        "title": "16c · Clip length (seconds)",
+        "title": "16c · Clip length (frames)",
         "inputs": [{"label": "value", "name": "value", "type": "INT", "widget": {"name": "value"}, "link": None}],
         "outputs": [{"name": "INT", "type": "INT", "slot_index": 0, "links": []}],
         "properties": {**props(ver="0.42.1"), "Node name for S&R": "PrimitiveInt"},
-        "widgets_values": [16, "fixed"],
+        "widgets_values": prev_widgets.get("c") or [16, "fixed"],
     }
     node_show = {
-        "id": show_id, "type": "ShowText|pysssss", "pos": [620, 1120], "size": [640, 300],
+        "id": show_id, "type": "ShowText|pysssss", "pos": _place("d", [620, 1120], None)[0],
+        "size": _place("d", None, [640, 300])[1],
         "flags": {}, "order": 6, "mode": 0,
         "title": "16d · Enhanced prompt (preview)",
         "inputs": [{"name": "text", "shape": 7, "type": "*", "link": None, "label": "Enhanced Prompt"}],
@@ -307,22 +389,17 @@ def main(src, dst):
     g["nodes"] += [node_lit, node_idea, node_dur, node_show]
     byid.update({lit_id: node_lit, idea_id: node_idea, dur_id: node_dur, show_id: node_show})
 
-    # duration hint: prefer the real clip length from LongForgeVideoSettings
-    # (frames / fps -> seconds, that is what the ADV enhancer asks the LLM for),
-    # fall back to the last "At frame X-Y" marker of scene 1.
+    # duration hint for the enhancer: "At frame X-Y" markers are FRAME numbers,
+    # so feed frames (LongForgeVideoSettings widget order: [mode, w, h, frames, fps]),
+    # falling back to the last frame marker of scene 1.
     project = next(iter(find_nodes(g, {"LongForgeProject"})), None)
     settings = next(iter(find_nodes(g, {"LongForgeVideoSettings"})), None)
-    seconds = None
+    frames_total = None
     if settings is not None and isinstance(settings.get("widgets_values"), list):
         try:
-            frames = int(settings["widgets_values"][3])
-            new_sec = float(settings["widgets_values"][11] or 0)
-            if new_sec > 0:
-                seconds = round(new_sec)
-            elif frames:
-                seconds = max(1, round(frames / 25))
+            frames_total = int(settings["widgets_values"][3])
         except Exception:
-            seconds = None
+            frames_total = None
     frames_hi = []
     if project is not None and isinstance(project.get("widgets_values"), list) and len(project["widgets_values"]) > 3:
         try:
@@ -332,7 +409,7 @@ def main(src, dst):
             frames_hi = [int(b) for _, b in pairs]
         except Exception:
             frames_hi = []
-    node_dur["widgets_values"][0] = seconds or (max(frames_hi) if frames_hi else 16)
+    node_dur["widgets_values"][0] = frames_total or (max(frames_hi) if frames_hi else 16)
 
     # vision input: the workflow's own "First frame" anchor if present,
     # otherwise the still-image loader that feeds it (LongForgeMediaLoader).
@@ -343,40 +420,96 @@ def main(src, dst):
 
     # ---- 4. wire it up -------------------------------------------------------
     lk = Linker(g, byid)
-    lk.connect(idea_id, 0, inst["id"], "text_a", "STRING")  # raw idea -> subgraph
+
+    # remember the link ids the previous run used for the ADV wiring, so that
+    # repeated runs reuse them instead of churning last_link_id every time.
+    alive_lids = {l[0] for l in g["links"] if isinstance(l, list)}
+
+    def _link_alive(lid):
+        return lid is not None and lid in alive_lids
+
+    def _in_link(node, name):
+        if node is None:
+            return None
+        for i in node.get("inputs", []):
+            if i.get("name") == name:
+                return i.get("link")
+        return None
+
+    idea_old_link = next((x for x in prev_links.get("e", []) if x is not None), None)
+    dur_old_link  = next((x for x in prev_links.get("c", []) if x is not None), None)
+    en_old_link   = next((x for x in prev_links.get("f", []) if x is not None), None)
+    show_old_link = next((x for x in prev_links.get("d", []) if x is not None), None)
+    # link ids that pointed INTO the old feeder nodes are now dangling (the
+    # links[] records were removed together with those nodes), so they can be
+    # reused by the rebuilt connections -> stable ids across re-runs.
+    inst_old = {n: (_in_link(inst, n) if _link_alive(_in_link(inst, n)) else None)
+                for n in ("int_", "text_a", "image", "switch")} if inst is not None else {}
+    used_link_ids = {l[0] for l in g["links"] if isinstance(l, list)}
+
+    def connect_keep(old_lid, src_id, src_slot, dst_id, dst_name, dtype):
+        """Create a link reusing the old link id when possible, so repeated
+        runs of this script don't churn last_link_id / link ids."""
+        cur = byid[dst_id]["inputs"][next((i for i, x in enumerate(byid[dst_id]["inputs"])
+                                           if x.get("name") == dst_name), 0)].get("link")
+        if cur is not None and _link_alive(cur):
+            old_lid = None  # destination already has a live link, don't collide
+        if old_lid is not None and old_lid not in used_link_ids:
+            used_link_ids.add(old_lid)
+            dst = byid[dst_id]
+            idx = [i for i, x in enumerate(dst["inputs"]) if x.get("name") == dst_name]
+            if idx:
+                lid = old_lid
+                g["links"].append([lid, src_id, src_slot, dst_id, idx[0], dtype])
+                dst["inputs"][idx[0]]["link"] = lid
+                if "widget" in dst["inputs"][idx[0]]:
+                    dst["inputs"][idx[0]]["widget"] = None
+                out = byid[src_id]["outputs"][src_slot]
+                out.setdefault("links", [])
+                if lid not in out["links"]:
+                    out["links"].append(lid)
+                return lid
+        return lk.connect(src_id, src_slot, dst_id, dst_name, dtype)
+
+    connect_keep(idea_old_link, idea_id, 0, inst["id"], "text_a", "STRING")  # raw idea -> subgraph
     # keep the format-rules literal visible but not wired: paste it into the
     # subgraph's internal "Prompt" node if you want the H3 timeline format.
     node_lit["mode"] = 4  # muted
-    lk.connect(dur_id, 0, inst["id"], "int_", "INT")        # clip length
+    connect_keep(dur_old_link, dur_id, 0, inst["id"], "int_", "INT")        # clip length
     if vision_src is not None:
         slot = 0
         if vision_src.get("type") == "LongForgeMediaLoader":
             named = [i for i, o in enumerate(vision_src["outputs"]) if o.get("name") == "first_frame"]
             slot = named[0] if named else 0
-        lk.connect(vision_src["id"], slot, inst["id"], "image", "IMAGE")
+        connect_keep(inst_old.get("image"), vision_src["id"], slot, inst["id"], "image", "IMAGE")
     else:
         print("[info] no first-frame source found - ADV runs text-only ('image' left empty)")
 
-    en_id = base + 5
     node_en = {
-        "id": en_id, "type": "PrimitiveBoolean", "pos": [-760, 1880], "size": [210, 90],
+        "id": en_id, "type": "PrimitiveBoolean", "pos": _place("f", [-760, 1880], None)[0],
+        "size": _place("f", None, [210, 90])[1],
         "flags": {}, "order": 3, "mode": 0,
         "title": "16f · Enhance ON/OFF",
         "inputs": [{"label": "value", "name": "value", "type": "BOOLEAN",
                     "widget": {"name": "value"}, "link": None}],
         "outputs": [{"name": "BOOLEAN", "type": "BOOLEAN", "slot_index": 0, "links": []}],
         "properties": {**props(ver="0.22.0"), "Node name for S&R": "PrimitiveBoolean"},
-        "widgets_values": [True],
+        "widgets_values": prev_widgets.get("f") or [True],
     }
     g["nodes"].append(node_en)
     byid[en_id] = node_en
-    lk.connect(en_id, 0, inst["id"], "switch", "BOOLEAN")
+    connect_keep(en_old_link, en_id, 0, inst["id"], "switch", "BOOLEAN")
 
     if project is not None:
-        lk.connect(inst["id"], 0, project["id"], "scene_data", "STRING")
+        sd_idx = next((i for i, x in enumerate(project["inputs"]) if x.get("name") == "scene_data"), None)
+        if sd_idx is not None:
+            old_sd = project["inputs"][sd_idx].get("link")
+            if old_sd is not None and not _link_alive(old_sd):
+                project["inputs"][sd_idx]["link"] = None  # dangling from a dropped node
+        connect_keep(inst_old.get("text_a"), inst["id"], 0, project["id"], "scene_data", "STRING")
     else:
         print("[warn] LongForgeProject not found - enhanced prompt not connected to scene_data")
-    lk.connect(inst["id"], 0, show_id, "text", "*")
+    connect_keep(show_old_link, inst["id"], 0, show_id, "text", "*")
 
     # integrity pass: rebuild links[] from what the slots actually reference
     def _slot_links(lid_map):
@@ -443,6 +576,14 @@ def main(src, dst):
 
 
 if __name__ == "__main__":
-    a = sys.argv[1] if len(sys.argv) > 1 else "/tmp/target.json"
+    if len(sys.argv) < 2:
+        sys.exit(
+            "Использование:\n"
+            '  python swap_prompt_assistant_adv.py "<путь к workflow.json>" ["выход.json"]\n'
+            "Пример (in-place в папке скрипта):\n"
+            '  python swap_prompt_assistant_adv.py "D:\\ComfyUi2\\scriptWorkflow\\H3_LongForge_FL2VA_REF2VA_v6.5 (2).json"\n'
+            "Без второго аргумента создаётся копия <имя>_ADV.json рядом с оригиналом."
+        )
+    a = sys.argv[1]
     b = sys.argv[2] if len(sys.argv) > 2 else str(Path(a).with_name(Path(a).stem + "_ADV.json"))
     main(a, b)
