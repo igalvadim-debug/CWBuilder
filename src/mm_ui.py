@@ -251,8 +251,9 @@ def layout_for(mode: str) -> dict:
 
 def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_off,
                 seed, negative, ref_files, width, height, batch,
-                unet, clip, vae, loras_txt, control_on, control_kind, control_img,
-                run_now, out_json, progress=gr.Progress()):
+                unet, clip, vae, loras_txt, loras_sel=None, control_on=False,
+                control_kind=None, control_img=None,
+                run_now=True, out_json="", progress=gr.Progress()):
     """Workflow erstellen und speichern, optional ausfuehren und Ergebnisse abrufen.
 
     Gibt Protokolltext sowie Gradio-Updates fuer Video und Bilder zurueck.
@@ -343,6 +344,18 @@ def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_of
 
         # ---------- Bild-Modi ----------
         import mm_images as I
+        # Start: Modellordner gemaess config.json scannen und docs/models.txt
+        # aktualisieren (ergaenzt neue, entfernt verschwundene Dateien).
+        try:
+            reg = I.scan_model_registry()
+            if reg.get("skipped"):
+                log("[i] Modell-Scan: keine Root-Ordner auf diesem System - "
+                    f"docs/models.txt bleibt unveraendelt ({reg['total']} Eintraege).")
+            elif reg["added"] or reg["removed"]:
+                log(f"[i] Modell-Scan: {reg['added']} neu, {reg['removed']} entfernt "
+                    f"-> {reg['path']} ({reg['total']} Eintraege).")
+        except Exception as e:
+            log(f"[!] Modell-Scan fehlgeschlagen (weiter mit bestehender Liste): {e}")
         tgt = C.target(CFG, "image")
         progress(0.1, desc="Modelle bestimmen")
         cat = catalog_for("image")
@@ -350,6 +363,22 @@ def do_generate(prompt, mode, aspect, mp, duration, fps, steps, turbo, extras_of
         staged = [I.stage_image(f, tgt, upload=alive) for f in (ref_files or []) if f]
         ctrl = I.stage_image(control_img, tgt, upload=alive) if control_img else None
         loras = []
+        # Auswahl aus dem LoRA-Vorschlag: Label 'name.ext  [Trigger]' -> Pfad relativ
+        # zum Root, in dem die Datei laut models.txt liegt (ComfyUI-Subpfad).
+        label_paths = dict(I.loras_for_mode(mode, unet or None)) if loras_sel else {}
+        reg_entries = I.load_models_txt() if label_paths else []
+        for lbl in (loras_sel or []):
+            fp = label_paths.get(lbl)
+            if not fp:
+                continue
+            rel = Path(fp).name
+            norm = fp.replace("\\", "/").lower()
+            for e in reg_entries:
+                ef = e["full"].replace("\\", "/")
+                if ef.replace("\\", "/").lower() == norm and e["root"]:
+                    rel = ef[len(e["root"].rstrip("/")) + 1:]
+                    break
+            loras.append((rel, 1.0))
         for it in (loras_txt or "").split(","):
             it = it.strip()
             if not it:
@@ -453,7 +482,9 @@ def build_ui() -> gr.Blocks:
             unet = gr.Dropdown(label="Diffusion-Modell", choices=[], allow_custom_value=True)
             clip = gr.Dropdown(label="Text-Encoder", choices=[], allow_custom_value=True)
             vae = gr.Dropdown(label="VAE", choices=[], allow_custom_value=True)
-            loras_txt = gr.Textbox(label="LoRAs (Name:Staerke, Komma)", value="")
+            loras_pick = gr.CheckboxGroup(choices=[], label="LoRAs fuer dieses Modell (Vorschlag)", value=[])
+            loras_txt = gr.Textbox(label="LoRAs extra (Name:Staerke, Komma)", value="",
+                                   info="Eintrag aus der Auswahl oben: Name; eigener Eintrag: Name:1.0")
 
         with gr.Row(visible=False) as wh_row:
             width = gr.Number(value=CFG["image"]["width"], label="Breite", precision=0)
@@ -495,6 +526,14 @@ def build_ui() -> gr.Blocks:
             health_video = gr.Markdown("Video-ComfyUI: pruefen...")
             health_refresh = gr.Button("🔄 Pruefen", variant="secondary", size="sm")
 
+        def lora_suggestions(m, u):
+            """LoRA-Vorschlaege (Label, Pfad) zum Modus und gewaehltem Diffusionsmodell."""
+            import mm_images as I
+            try:
+                return I.loras_for_mode(m, u or None)
+            except Exception:
+                return []
+
         def apply_mode(m, u, c, v):
             """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern."""
             vis = layout_for(m)
@@ -503,6 +542,9 @@ def build_ui() -> gr.Blocks:
             needle_u = {"ltx25": "ltx", "minimax_h3": "minimax|h3"}.get(m)
             ch = B._changes("ltx25" if m == "ltx25" else "minimax_h3") \
                 if m in ("ltx25", "minimax_h3") else {}
+            uu = combo(tgt_name, "unet", needle_u, u)
+            sel_u = uu.get("value") if isinstance(uu, dict) else None
+            picks = lora_suggestions(m, sel_u or u)
             return (
                 gr.update(visible=vis["refs"]),
                 gr.update(visible=vis["aspect"]), gr.update(visible=vis["mp"]),
@@ -513,28 +555,35 @@ def build_ui() -> gr.Blocks:
                 gr.update(visible=vis["neg"]),
                 gr.update(visible=vis["models"]),
                 gr.update(visible=vis["wh"]), gr.update(visible=vis["control"]),
-                combo(tgt_name, "unet", needle_u, u),
+                uu,
                 combo(tgt_name, "text_encoders", needle_u, c),
                 combo(tgt_name, "vae", needle_u, v),
+                gr.update(choices=[lbl for lbl, _ in picks], value=[]),
                 gr.update(visible=vis["moss_inpaint_opts"]),
                 gr.update(visible=vis["moss_detailer_opts"]),
                 gr.update(visible=vis["moss_prompt_opts"]),
             )
 
+        def refresh_loras(m, u):
+            """LoRA-Auswahl erneut füllen, wenn das Diffusionsmodell wechselt."""
+            return gr.update(choices=[lbl for lbl, _ in lora_suggestions(m, u)], value=[])
+
         outputs = [refs, aspect, mp, duration, fps, steps, turbo, extras, negative,
-                   models_row, wh_row, ctl_row, unet, clip, vae,
+                   models_row, wh_row, ctl_row, unet, clip, vae, loras_pick,
                    moss_inpaint_row, moss_detailer_row, moss_prompt_row]
         mode.change(apply_mode, [mode, unet, clip, vae], outputs)
+        unet.change(refresh_loras, [mode, unet], loras_pick)
 
         def gen(*a):
             """Dateieingaben normalisieren, Generierung starten und erfolgreiche Auswahl speichern."""
             (prompt_v, mode_v, aspect_v, mp_v, dur_v, fps_v, steps_v, turbo_v, off_v,
-             seed_v, neg_v, ref_v, w_v, h_v, b_v, unet_v, clip_v, vae_v, loras_v,
+             seed_v, neg_v, ref_v, w_v, h_v, b_v, unet_v, clip_v, vae_v, picks_v, loras_v,
              ctl_on_v, ctl_kind_v, ctl_img_v, run_v, out_v) = a
             files = [f if isinstance(f, str) else getattr(f, "name", "") for f in (ref_v or [])]
             res = do_generate(prompt_v, mode_v, aspect_v, mp_v, dur_v, fps_v, steps_v,
                               turbo_v, off_v, seed_v, neg_v, files, w_v, h_v, b_v,
-                              unet_v, clip_v, vae_v, loras_v, ctl_on_v, ctl_kind_v,
+                              unet_v, clip_v, vae_v, loras_v, picks_v,
+                              ctl_on_v, ctl_kind_v,
                               ctl_img_v, run_v, out_v)
             save_state({"mode": mode_v, "aspect": aspect_v, "mp": mp_v,
                         "duration": dur_v, "fps": fps_v, "steps": steps_v,
@@ -543,7 +592,7 @@ def build_ui() -> gr.Blocks:
             return res
 
         inputs = [prompt, mode, aspect, mp, duration, fps, steps, turbo, extras, seed,
-                  negative, refs, width, height, batch, unet, clip, vae, loras_txt,
+                  negative, refs, width, height, batch, unet, clip, vae, loras_pick, loras_txt,
                   ctl_on, ctl_kind, ctl_img, run_now, out_json]
         btn.click(gen, inputs, [log_box, video_out, gallery])
 
