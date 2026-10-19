@@ -1301,6 +1301,7 @@ LORA_FAMILY_MARKERS = ("ltx", "wan", "hunyuan", "sdxl", "sd15", "sd2",
 LORA_FAMILY_VARIANTS: dict[str, tuple] = {
     "ltx": ("ltx2", "ltx23", "ltx25", "ltxv"),
     "wan": ("wan21", "wan22"),
+    "flux": ("flux2",),
 }
 
 # Je Modus zusaetzlich erlaubte Familien-Varianten: erscheinen sie im Pfad,
@@ -1484,13 +1485,23 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
     # oder Namens-Fremdmarker (ltx2/wan/sdxl/...), der nicht zu den Suchtokens
     # gehoert, disqualifiziert - so erscheinen bei MOSS keine LTX-LoRAS.
     # Varianten der Marker (z.B. ltx2 fuer 'ltx') werden mit erkannt; ein
-    # ganzer Ordnername (z.B. 'flux2') gilt zunaechst als Stamm-Marker ('flux')
-    # und wird anerkannt, wenn eine erlaubte Familienvariante des Modi
-    # (klein9b/klein4b: 'flux2') im Pfad steckt.
+    # ganzer Ordnername (z.B. 'flux2') gilt zunaechst als Stamm-Marker ('flux').
+    # Eine erlaubte Familienvariante des Modi (klein9b/klein4b: 'flux2') befreit
+    # nur den zugeoerderten Marker - unabhaengige Marker (z.B. 'wan22')
+    # disqualifizieren weiterhin, auch wenn der Dateiname 'flux2' enthaelt.
     markers = {m for m in LORA_FAMILY_MARKERS if m not in toks}
-    marker_forms = ({v for stem, variants in LORA_FAMILY_VARIANTS.items()
-                     for v in variants if stem in markers})
+    marker_forms = {m: {m} | set(LORA_FAMILY_VARIANTS.get(m, ()))
+                    for m in markers}
     allowed_fams = LORA_ALLOWED_FAMILIES.get(mode, ())
+
+    def _foreign(dir_toks: list[str], low: str) -> bool:
+        for m, forms in marker_forms.items():
+            waived = any(v in low and any(v in dt for dt in dir_toks)
+                         for v in allowed_fams)
+            if not waived and any(any(f in dt for f in forms)
+                                  for dt in dir_toks):
+                return True
+        return False
 
     hits: list[tuple] = []
     seen_labels: set[str] = set()
@@ -1499,9 +1510,7 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
             continue
         low = _reg_norm(e["rel"])
         dir_toks = _lora_dir_tokens(e["rel"])
-        foreign = any(m in dt or any(f in dt for f in marker_forms)
-                      for dt in dir_toks for m in markers)
-        if foreign and not any(v in low for v in allowed_fams):
+        if _foreign(dir_toks, low):
             continue
         score = sum(1 for t in toks if t in low)
         if not score and e["family"] and any(t in e["family"] for t in toks):
