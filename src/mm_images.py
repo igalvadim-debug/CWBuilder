@@ -1286,6 +1286,23 @@ LORA_FAMILY_MARKERS = ("ltx", "wan", "hunyuan", "sdxl", "sd15", "sd2",
                        "moss", "flux2", "flux", "qwen", "z-image", "zimage")
 
 
+def _part_is_foreign_family(part: str, markers: set) -> bool:
+    """True, wenn ein Pfadteil eine andere Modellfamilie nennt (auch mit Version).
+
+    Exakte Treffer ('ltx', 'sdxl') und Varianten wie 'ltx2'/'ltxv1'/'wan22'
+    werden ueber LORA_FAMILY_MARKERS erkannt, damit z.B.
+    loras/ltx2/LTX2.3_DMD_hybrid_v2.safetensors bei MOSS disqualifiziert wird.
+    """
+    if part in markers:
+        return True
+    # Varianten wie 'ltx2'/'wan2.2'/'hunyuan1': fuehrenden Stamm des Pfadteils
+    # (Buchstaben, optional mit Ziffer) gegen alle Marker pruefen.
+    m = re.match(r"[a-z]+[0-9]*", part)
+    stem = m.group(0) if m else ""
+    return any(stem == mk or stem.startswith(mk)
+               for mk in markers if len(mk) >= 3)
+
+
 def registry_roots() -> list[Path]:
     """Modellwurzeln aus config.json (image+video, ohne Duplikate) als Pfade liefern."""
     import mm_common as C
@@ -1456,7 +1473,7 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
         # MOSS-Stichwort ist; Dateinamen wie 'pixel_art_style_z_image_turbo'
         # bleiben dagegen als generische Stil-LoRAs zulaessig.
         path_parts = [p for p in low.split("/")[:-1] if p]
-        if any(p in markers for p in path_parts):
+        if any(_part_is_foreign_family(p, markers) for p in path_parts):
             continue
         score = sum(1 for t in toks if t in low)
         if not score and e["family"] and any(t in e["family"] for t in toks):
