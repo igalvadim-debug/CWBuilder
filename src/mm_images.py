@@ -79,6 +79,7 @@ class Turbo:
     steps: int | None
     cfg: float | None
     label: str
+    strength: float = 1.0
 
 
 # Turbo-/Beschleuniger-LoRAs je Modus: key -> (Dateiname-Teilstring, Steps, CFG)
@@ -224,6 +225,13 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
     inherent = "turbo" in base_name.lower()
     if choice in ("off", "no", "none", "0", "false"):
         return None
+
+    def strength_for(key: str, name: str) -> float:
+        """LoRA-Staerke: MOSS-DMD folgt docs/mosst2i_withLora.json (0.7), sonst 1.0."""
+        if key == "dmd8" or _reg_norm(name).endswith(_reg_norm(MOSS_TURBO_LORA_SUBPATH)):
+            return MOSS_DMD_STRENGTH
+        return 1.0
+
     if choice == "auto":
         if inherent:
             info["notes"].append("Basismodell ist bereits ein Turbo-Modell - keine zusaetzliche Turbo-LoRA (erzwingen: --turbo <preset>)")
@@ -236,17 +244,18 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
         try:
             cand, steps, cfg = presets[key]
             name = cat.pick("loras", [cand])
-            t = Turbo(name, steps, cfg, key)
+            t = Turbo(name, steps, cfg, key, strength_for(key, name))
         except ModelMissing as e:
             warn(info, f"Turbo-LoRA '{key}' nicht gefunden - laeuft ohne.\n      {e}")
             return None
     elif choice in presets:
         cand, steps, cfg = presets[choice]
-        t = Turbo(cat.pick("loras", [cand]), steps, cfg, choice)
+        name = cat.pick("loras", [cand])
+        t = Turbo(name, steps, cfg, choice, strength_for(choice, name))
     else:
         name = cat.pick("loras", [p.turbo])
-        t = Turbo(name, steps_from_name(name), 1.0, p.turbo)
-    note(info, "Turbo-LoRA", f"{t.lora} (Preset '{t.label}', {t.steps or '?'} Steps)")
+        t = Turbo(name, steps_from_name(name), 1.0, p.turbo, strength_for("", name))
+    note(info, "Turbo-LoRA", f"{t.lora} (Preset '{t.label}', {t.steps or '?'} Steps, x{t.strength})")
     return t
 
 
@@ -848,12 +857,14 @@ def build_flux3(p: Params, cat: Catalog, info: dict) -> Graph:
 def build_moss_t2i(p: Params, cat: Catalog, info: dict) -> Graph:
     """MOSS Text-to-Image.
 
+    Standard (Turbo 'auto') folgt docs/mosst2i_withLora.json: DMD-Turbo-LoRA
+    (MOSS/MOSS-Image-SFT-8-steps-dmd.safetensors, Staerke 1.0) bei 8 Steps / CFG 1.0.
     Turbo: 'auto' -> dmd8 (8 Steps, LoRA), 'rapid4' -> RapidMOSSAdapter 4 Steps,
     'off' -> base 25 Steps / CFG 3.5 without Turbo LoRA.
     """
     g = Graph()
     # MOSS UNet
-    unet_name = cat.pick("unet", [p.unet] if p.unet else ["moss_image_sft_int8_convrot.safetensors"], required=True)
+    unet_name = cat.pick("unet", [p.unet] if p.unet else [MOSS_DEFAULT_UNET], required=True)
     note(info, "UNet", unet_name)
     model = o(g.add("MOSSImageUNETLoader", unet_name=unet_name, weight_dtype="default"))
 
@@ -863,13 +874,13 @@ def build_moss_t2i(p: Params, cat: Catalog, info: dict) -> Graph:
     clip = o(g.add("MOSSImageCLIPLoader", clip_name=clip_name, type="moss_image", device="default"))
 
     # MOSS VAE
-    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
+    vae_name = cat.pick("vae", [p.vae] if p.vae else ["flux2_vae.safetensors", "flux2-vae.safetensors", "moss_image_vae_bf16.safetensors"], required=True)
     note(info, "VAE", vae_name)
     vae = o(g.add("VAELoader", vae_name=vae_name))
 
     # Turbo handling
     turbo = resolve_turbo(p, cat, info, "moss_t2i")
-    loras = ([(turbo.lora, 1.22)] if turbo else []) + user_loras(cat, p, info)  # 1.22 strength per workflow
+    loras = ([(turbo.lora, turbo.strength)] if turbo else []) + user_loras(cat, p, info)
     model = lora_model_only(g, model, loras)
 
     # Base steps/cfg for MOSS T2I
@@ -1174,6 +1185,48 @@ _registry_lock = threading.Lock()
 # Standard-Diffusionsmodell der MOSS-Modi (Default, wenn nichts gewaehlt ist).
 MOSS_DEFAULT_UNET = "moss_image_sft_int8_convrot.safetensors"
 
+# Turbo-LoRA aus docs/mosst2i_withLora.json: Unterordner + Dateiname (case-sensitiv).
+MOSS_TURBO_LORA_SUBPATH = "MOSS/MOSS-Image-SFT-8-steps-dmd.safetensors"
+
+# Staerke der DMD-Turbo-LoRA im Referenz-Workflow docs/mosst2i_withLora.json
+# (node 128: LoraLoaderModelOnly, strength_model = 0.7).
+MOSS_DMD_STRENGTH = 0.7
+
+# ───────────────────────────── Modell-Registry (docs/models.txt) ─────────────────────────────
+
+def _reg_norm(s: str) -> str:
+    return s.replace("\\", "/").lower()
+
+
+# ───────────────────────────── Standard-Checkpoints je Modus ─────────────────────────────
+
+# Default-Diffusionsmodell je Modus - wird als korrekter Checkpoint direkt ins
+# Gradio-Dropdown geladen. Quelle: Workflow-JSONs unter docs/ (MOSS:
+# mosst2i_withLora.json); fuer diebrigen Modi die erste Bau-Kandidatenliste.
+MODE_DEFAULT_UNET: dict[str, str] = {
+    "krea2":     "krea2Turbo18For_v2",
+    "klein9b":   "flux2Klein_9b",
+    "klein4b":   "flux-2-klein-4b",
+    "qwen-edit": "qwen-image-edit-2511-Q4_K_S",
+    "qwen21":    "qwen_image_2.1_int8_convrot",
+    "zimage":    "z-image-turbo-fp8-aio",
+    "flux3":     FLUX3_UNET_CANDS[0],
+    "moss_t2i":  MOSS_DEFAULT_UNET,
+    "moss_inpaint": MOSS_DEFAULT_UNET,
+    "moss_detailer": MOSS_DEFAULT_UNET,
+    "moss_4step": MOSS_DEFAULT_UNET,
+}
+
+
+def default_unet_for(mode: str) -> str | None:
+    """Standard-Diffusionsmodell eines Modus liefern (None = kein fester Default)."""
+    return MODE_DEFAULT_UNET.get(mode)
+
+
+# Pfadbestandteile, die bei Modell-Scans / LoRA-Vorschlaegen ignoriert werden.
+REGISTRY_SKIP_PARTS = {"custom_nodes", ".disabled", "__pycache__", ".cache",
+                       "text_embed_cache", "node_modules"}
+
 # Zusatz-Stichwoerter je Modus fuer den LoRA-Vorschlag (zusaetzlich zum UNET-Namen).
 LORA_MODE_HINTS = {
     "klein9b": ["flux2", "klein", "9b"],
@@ -1183,11 +1236,19 @@ LORA_MODE_HINTS = {
     "krea2": ["krea2", "krea"],
     "zimage": ["z-image", "zimage"],
     "flux3": ["flux3", "flux"],
-    "moss_t2i": ["moss"],
-    "moss_inpaint": ["moss"],
-    "moss_detailer": ["moss"],
+    # MOSS: nur echte MOSS-LoRAs vorschlagen - 'image' waehrt qwen/z-image-LoRAs aus.
+    "moss_t2i": ["moss", "dmd"],
+    "moss_inpaint": ["moss", "dmd"],
+    "moss_detailer": ["moss", "dmd"],
     "moss_4step": ["moss", "rapid"],
 }
+
+# Fremdmarker: Ordner-/Namensbestandteile, die eine LoRA eindeutig einer
+# anderen Modellfamilie zuordnen (z.B. loras/ltx2/... = LTX-Video-LoRAs).
+# Erscheint ein solcher Marker im Pfad und passt nicht zu den Suchtokens des
+# gewaehlten Modus/Diffusionsmodells, wird die LoRA nicht vorgeschlagen.
+LORA_FAMILY_MARKERS = ("ltx", "wan", "hunyuan", "sdxl", "sd15", "sd2",
+                       "minimax", "krea", "ideogram", "animatediff")
 
 
 def registry_roots() -> list[Path]:
@@ -1213,11 +1274,18 @@ def _reg_family(rel: str) -> str:
     return "_".join(parts[-1:]) if parts else ""
 
 
+def _reg_skip(rel: str) -> bool:
+    """True, wenn ein relativer Pfad außerhalb der Modellordner liegt (Node-Muell)."""
+    return any(part.lower() in REGISTRY_SKIP_PARTS for part in rel.replace("\\", "/").split("/"))
+
+
 def _reg_line(path: Path, root: Path) -> str | None:
     """Eine models.txt-Zeile fuer eine Modelldatei bauen; Trigger aus alter Zeile uebernehmen."""
     try:
         rel = path.relative_to(root)
     except ValueError:
+        return None
+    if _reg_skip(str(rel)):
         return None
     full = str(path.resolve())
     trig = ""
@@ -1288,7 +1356,19 @@ def scan_model_registry(roots=None) -> dict:
         removed = len([l for l in old_lines if l.strip()]) - len(keep)
         text = "\n".join(keep + sorted(new_entries, key=str.lower)) + ("\n" if keep or new_entries else "")
         MODELS_TXT.parent.mkdir(parents=True, exist_ok=True)
-        MODELS_TXT.write_text(text, encoding="utf-8")
+        # Atomar schreiben: erst in eine Temp-Datei desselben Verzeichnisses,
+        # dann os.replace(). Schlaegt der Schreibvorgang fehl (z.B. Platte voll,
+        # Datei gesperrt), bleibt die bestehende models.txt unversehrt.
+        tmp = MODELS_TXT.with_name(MODELS_TXT.name + ".tmp")
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, MODELS_TXT)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            raise
     return {"added": added, "removed": max(removed, 0),
             "total": len(keep) + len(new_entries), "path": str(MODELS_TXT)}
 
@@ -1319,14 +1399,21 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
     es = entries if entries is not None else load_models_txt()
     needle = _reg_norm(unet_choice.rsplit("/", 1)[-1]) if unet_choice else \
         _reg_norm(MOSS_DEFAULT_UNET)
-    toks = [t for t in re.split(r"[^a-z0-9]+", needle) if len(t) >= 3][:4]
+    toks = [t for t in re.split(r"[^a-z0-9]+", needle) if len(t) >= 3 and t != "image"][:4]
     toks += [t for t in LORA_MODE_HINTS.get(mode, []) if t not in toks]
+    # Vorfilter: LoRAs muessen zum Modus/Diffusionsmodell passen. Ein Ordner-
+    # oder Namens-Fremdmarker (ltx2/wan/sdxl/...), der nicht zu den Suchtokens
+    # gehoert, disqualifiziert - so erscheinen bei MOSS keine LTX-LoRAS.
+    markers = {m for m in LORA_FAMILY_MARKERS if m not in toks}
+
     hits: list[tuple] = []
     seen_labels: set[str] = set()
     for e in es:
-        if "/loras/" not in _reg_norm(e["full"]):
+        if "/loras/" not in _reg_norm(e["full"]) or _reg_skip(e["rel"]):
             continue
         low = _reg_norm(e["rel"])
+        if any(m in low for m in markers):
+            continue
         score = sum(1 for t in toks if t in low)
         if not score and e["family"] and any(t in e["family"] for t in toks):
             score = 1
