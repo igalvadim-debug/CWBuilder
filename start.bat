@@ -43,9 +43,13 @@ if not exist "venv\Scripts\python.exe" goto :no_venv
 set "PYEXE=venv\Scripts\python.exe"
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
-echo Starte Gradio UI (mm.py ui)...
+echo Starte Gradio UI (src\mm.py ui)...
 echo Interpreter: %PYEXE%
-"%PYEXE%" mm.py ui %*
+"%PYEXE%" src\mm.py ui %*
+if errorlevel 1 (
+    echo FEHLER: Gradio UI wurde beendet (siehe Meldung oben).
+    pause
+)
 exit /b 0
 
 :comfy
@@ -81,7 +85,7 @@ set "PYEXE=venv\Scripts\python.exe"
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 echo Pruefe alle Modi gegen vorhandene Modelle...
-"%PYEXE%" mm.py check %*
+"%PYEXE%" src\mm.py check %*
 pause
 exit /b 0
 

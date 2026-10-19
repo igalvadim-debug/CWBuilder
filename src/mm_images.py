@@ -219,6 +219,22 @@ def user_loras(cat: Catalog, p: Params, info: dict) -> list:
     return out
 
 
+def _resolve_turbo_lora(p: Params, cat: Catalog, cand: str) -> str | None:
+    """Turbo-LoRA zum Preset-Kandidaten finden - nur aus dem passenden Familienordner.
+
+    'MOSS-Image-SFT-8-steps-dmd' liegt laut docs in loras/MOSS/. Ein reiner
+    Namens-Teilstring-Treffer (cat.pick) matcht andernfalls auch Kopien in
+    fremden LoRA-Ordnern (z.B. loras/flux2/...). Bei MOSS-Modi wird daher der
+    Kandidat zuerst im Unterordner 'moss/' gesucht; erst danach fällt die
+    Suche auf die allgemeine Auswahl zurück.
+    """
+    if p.mode.startswith("moss"):
+        scoped = cat.pick("loras", [f"moss/{cand}"], required=False)
+        if scoped:
+            return scoped
+    return cat.pick("loras", [cand], required=False)
+
+
 def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo | None:
     presets = TURBO_PRESETS.get(p.mode, {})
     choice = (p.turbo or "auto").strip().lower()
@@ -241,13 +257,12 @@ def resolve_turbo(p: Params, cat: Catalog, info: dict, base_name: str) -> Turbo 
             # auto laedt keine Turbo-LoRA, nur ein explizites --turbo <lora> wirkt.
             return None
         key = next(iter(presets))
-        try:
-            cand, steps, cfg = presets[key]
-            name = cat.pick("loras", [cand])
-            t = Turbo(name, steps, cfg, key, strength_for(key, name))
-        except ModelMissing as e:
-            warn(info, f"Turbo-LoRA '{key}' nicht gefunden - laeuft ohne.\n      {e}")
+        cand, steps, cfg = presets[key]
+        name = _resolve_turbo_lora(p, cat, cand)
+        if name is None:
+            warn(info, f"Turbo-LoRA '{key}' nicht gefunden - laeuft ohne.")
             return None
+        t = Turbo(name, steps, cfg, key, strength_for(key, name))
     elif choice in presets:
         cand, steps, cfg = presets[choice]
         name = cat.pick("loras", [cand])
@@ -617,9 +632,17 @@ def build_zimage(p: Params, cat: Catalog, info: dict) -> Graph:
 # ───────────────────────────── Modus: FLUX.3 (Klein Base int8) ─────────────────────────────
 
 FLUX3_UNET_CANDS = ["flux3_image_klein_base_int8_convrot", "flux3_image_klein_base", "flux3_klein_base", "flux3"]
-FLUX3_CLIP_CANDS = ["gemma4-12b-with-proj-ltx-2.5-nvfp4", "gemma4_e2b_it_bf16", "gemma-4-E2B-it-abliterated",
-                    "Gemma-4-12B-it-uncensored-hereti20DeepNeuralNerd20-LTX202.5-ComfyUI-int8convrot"]
-FLUX3_UPSAMPLER_CANDS = ["qwen3.5_9b_flux3_prompt_upsampler_w4a8", "flux3_prompt_upsampler",
+# Flux 3 braucht den dedizierten Prompt-Upsampler (LLM) als ZWEITEN Encoder:
+# qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors in text_encoders/. Er steht
+# nicht zur Auswahl, wenn das Dropdown nur einen Encoder zeigt - daher eigener
+# Kandidat im Builder und eigenes UI-Feld fuer den Modus flux3.
+FLUX3_PROMPT_ENCODER_CANDS = ["qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+                              "qwen3.5_9b_flux3_prompt_upsampler_w4a8",
+                              "moss-image-sft-qwen35-int8-convrot.safetensors"]
+FLUX3_CLIP_CANDS = ["gemma4_e2b_it_bf16", "gemma-4-E2B-it-abliterated",
+                    "Gemma-4-12B-it-uncensored-hereti20DeepNeuralNerd20-LTX202.5-ComfyUI-int8convrot",
+                    "gemma4-12b-with-proj-ltx-2.5-nvfp4"]
+FLUX3_UPSAMPLER_CANDS = FLUX3_PROMPT_ENCODER_CANDS + ["flux3_prompt_upsampler",
                          "Qwen3.5-9B-heretic-v2", "qwen3.5", "Qwen3.5-4B-heretic-v2"]
 
 
@@ -897,9 +920,11 @@ def build_moss_t2i(p: Params, cat: Catalog, info: dict) -> Graph:
     latent = o(g.add("EmptyFlux2LatentImage", width=W, height=H, batch_size=p.batch))
 
     # KSampler
-    ksampler(g, p, info, model, pos, neg, latent, steps, cfg, smp, sch)
+    ks = ksampler(g, p, info, model, pos, neg, latent, steps, cfg, smp, sch)
 
-    finish(g, p, latent, vae)
+    # VAEDecode muss die Sampler-Ausgabe nehmen: das leere Start-Latent waere
+    # ein Schwarzbild ('leeres Bild in 3 Sekunden').
+    finish(g, p, o(ks), vae)
     return g
 
 
