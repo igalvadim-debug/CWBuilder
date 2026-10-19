@@ -1281,7 +1281,7 @@ LORA_MODE_HINTS = {
 # anderen Modellfamilie zuordnen (z.B. loras/ltx2/... = LTX-Video-LoRAs).
 # Erscheint ein solcher Marker im Pfad und passt nicht zu den Suchtokens des
 # gewaehlten Modus/Diffusionsmodells, wird die LoRA nicht vorgeschlagen.
-LORA_FAMILY_MARKERS = ("ltx", "wan", "hunyuan", "sdxl", "sd15", "sd2",
+LORA_FAMILY_MARKERS = ("ltx", "ltx2", "ltx2.3", "wan", "hunyuan", "sdxl", "sd15", "sd2",
                        "minimax", "krea", "ideogram", "animatediff",
                        "moss", "flux2", "flux", "qwen", "z-image", "zimage")
 
@@ -1434,6 +1434,7 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
     es = entries if entries is not None else load_models_txt()
     needle = _reg_norm(unet_choice.rsplit("/", 1)[-1]) if unet_choice else \
         _reg_norm(MOSS_DEFAULT_UNET)
+    needle = needle.removesuffix(".safetensors")
     # Tokens: exakte Namensstaemme (>=3 Zeichen, Fuellworter 'image'/'sft'/'lora' aus)
     # plus Modus-Stichwoerter (LORA_MODE_HINTS) als Rating-Treffer.
     toks = [t for t in re.split(r"[^a-z0-9]+", needle)
