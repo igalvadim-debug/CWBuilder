@@ -1494,13 +1494,32 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
                     for m in markers}
     allowed_fams = LORA_ALLOWED_FAMILIES.get(mode, ())
 
-    def _foreign(dir_toks: list[str], low: str) -> bool:
+    def _foreign(rel: str, path_toks: list[str]) -> bool:
+        # Pfad-Tokens (Ordner + Dateiname): ein Fremdmarker kann auch nur im
+        # Dateiname stehen (z.B. 'wan22_motion.safetensors' ohne wan-Ordner).
+        # Ein erlaubter Familienordner befreit genau einen Marker-Stamm - den
+        # eigenen ('flux2_klein' -> Stamm 'flux') - und hoelt keine fremden
+        # Marker wie 'wan22' oder 'ltx2'. Uebliche Ordner wie bloss 'flux2'
+        # enthalten bereits die Suchtokens des Modus; ihr Marker-Stamm faellt
+        # dann ohnehin aus 'markers' heraus (m not in toks entfaellt dort
+        # ueber die Token-Pruefung unten).
+        dir_toks = _lora_dir_tokens(rel)
+        waived_stems: set[str] = set()
+        for dt in dir_toks:
+            if any(mm in dt for mm in markers):
+                continue          # Ordner traegt selbst einen Fremdmarker
+            for stem, vs in LORA_FAMILY_VARIANTS.items():
+                if stem not in allowed_fams:
+                    continue      # nur erlaubte Familienordner befreien ihren Stamm
+                if any(v in dt for v in (stem,) + tuple(vs)):
+                    waived_stems.add(stem)
         for m, forms in marker_forms.items():
-            waived = any(v in low and any(v in dt for dt in dir_toks)
-                         for v in allowed_fams)
-            if not waived and any(any(f in dt for f in forms)
-                                  for dt in dir_toks):
-                return True
+            hit = any(any(f in dt for f in forms) for dt in path_toks)
+            if not hit:
+                continue
+            if m in allowed_fams or m in waived_stems:
+                continue          # eigener erlaubter Familienordner befreit
+            return True
         return False
 
     hits: list[tuple] = []
@@ -1509,8 +1528,12 @@ def loras_for_mode(mode: str, unet_choice: str | None = None, entries=None) -> l
         if "/loras/" not in _reg_norm(e["full"]) or _reg_skip(e["rel"]):
             continue
         low = _reg_norm(e["rel"])
-        dir_toks = _lora_dir_tokens(e["rel"])
-        if _foreign(dir_toks, low):
+        # Token aus dem Dateinamen (Endung abgetrennt) ergaenzen, damit auch
+        # reine Namensmarker wie 'wan'/'wan22' im Filename disqualifizieren.
+        stem = low.rsplit("/", 1)[-1]
+        stem = re.sub(r"\.(safetensors|ckpt|pt|pth|bin|gguf)$", "", stem)
+        path_toks = _lora_dir_tokens(e["rel"]) + [stem]
+        if _foreign(e["rel"], path_toks):
             continue
         score = sum(1 for t in toks if t in low)
         if not score and e["family"] and any(t in e["family"] for t in toks):

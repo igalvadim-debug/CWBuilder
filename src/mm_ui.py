@@ -564,18 +564,31 @@ def build_ui() -> gr.Blocks:
             except Exception:
                 return []
 
+        last_mode = {"m": st["mode"]}   # zuletzt angewendeter Modus ( fuer apply_mode )
+
         def apply_mode(m, u, c, v):
             """Modus speichern und Sichtbarkeits- sowie Modell-Dropdown-Updates liefern."""
             import mm_images as I
             vis = layout_for(m)
             save_state({"mode": m})
+            # Moduswechsel: aus dem vorherigen Modus uebernommene Encoder-/VAE-
+            # Auswahl ignorieren, damit der Default des neuen Modus greift.
+            mode_changed = (m != last_mode["m"])
+            last_mode["m"] = m
             tgt_name = "video" if m in VIDEO_MODES else "image"
             needle_u = {"ltx25": "ltx", "minimax_h3": "minimax|h3"}.get(m)
             ch = B._changes("ltx25" if m == "ltx25" else "minimax_h3") \
                 if m in ("ltx25", "minimax_h3") else {}
-            uu = combo(tgt_name, "unet", needle_u, u, prefer=I.default_unet_for(m))
+            uu = combo(tgt_name, "unet", needle_u, None if mode_changed else u,
+                       prefer=I.default_unet_for(m))
             sel_u = uu.get("value") if isinstance(uu, dict) else None
             picks = lora_suggestions(m, sel_u or u)
+            clip_cur = None if mode_changed else c
+            vae_cur = None if mode_changed else v
+            cc = combo(tgt_name, "text_encoders", needle_u, clip_cur,
+                       prefer=I.default_clip_for(m))
+            vv = combo(tgt_name, "vae", needle_u, vae_cur,
+                       prefer=I.default_vae_for(m))
             return (
                 gr.update(visible=vis["refs"]),
                 gr.update(visible=vis["aspect"]), gr.update(visible=vis["mp"]),
@@ -587,8 +600,8 @@ def build_ui() -> gr.Blocks:
                 gr.update(visible=vis["models"]),
                 gr.update(visible=vis["wh"]), gr.update(visible=vis["control"]),
                 uu,
-                combo(tgt_name, "text_encoders", needle_u, c),
-                combo(tgt_name, "vae", needle_u, v),
+                cc,
+                vv,
                 gr.update(choices=[lbl for lbl, _ in picks], value=[]),
                 gr.update(visible=vis["moss_inpaint_opts"]),
                 gr.update(visible=vis["moss_detailer_opts"]),
